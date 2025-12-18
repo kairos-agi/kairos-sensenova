@@ -1,0 +1,13 @@
+{
+    "prompt":"The video opens with an aerial view of a bustling city skyline bathed in the warm glow of early morning or late afternoon sunlight. The scene is dominated by a cluster of modern high-rises in the center, their sleek, reflective surfaces catching the light and standing out against the surrounding urban landscape. The buildings vary in height and design, creating a dynamic and layered skyline. Below, a network of roads and intersections forms a dense grid, though individual vehicles are not distinctly visible from this high vantage point. A large plume of smoke or haze hangs over the city, suggesting a fire or industrial activity, adding a dramatic and somewhat ominous element to the serene urban setting. The atmosphere is calm, with the city appearing at rest before the day's activities begin. Throughout the video, the focus remains on the static urban landscape and the persistent haze, maintaining a tranquil yet slightly ominous mood throughout the sequence. By the final frame, the scene continues to depict the same tranquil yet somber cityscape, with the smoke or haze still hovering over the buildings, preserving the serene yet slightly ominous ambiance established in the initial frame.",
+    "input_image": "",
+    "negative_prompt" : "bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, deformed limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards",
+    "seed":0, 
+    "tiled":true,
+    "height":1080,
+    "width":1920,
+    "num_frames":81,
+    "cfg_scale":8
+}
+
+
