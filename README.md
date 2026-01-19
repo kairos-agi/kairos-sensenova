@@ -78,7 +78,7 @@ This hierarchical composition balances **local motion modeling**, **mid-range te
 
 | Models | Description |
 |--------------------| -------------|
-| <a href="xxxxx">Kairos-sensenova-4B-pretrained-480p</a>     | 480p pretrained model with 16fps |
+| <a href="https://huggingface.co/kairos-agi/kairos-sensenova-common">Kairos-sensenova-4B-pretrained-480p</a>     | 480p pretrained model with 16fps |
 | Kairos-sensenova-4B-posttrained     | posttrained model |
 
 ## Run Kairos 3.0
