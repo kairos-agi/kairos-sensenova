@@ -234,15 +234,17 @@ class KairosVideoPipeline(BasePipeline):
         )
 
         # self.scheduler.set_timesteps(num_inference_steps, denoising_strength=denoising_strength, shift=sigma_shift)
-
+        
         # Inputs
         inputs_posi = {
             "prompt": prompt,
             "tea_cache_l1_thresh": tea_cache_l1_thresh, "tea_cache_model_id": tea_cache_model_id, "num_inference_steps": num_inference_steps,
+            "positive": True,
         }
         inputs_nega = {
             "negative_prompt": negative_prompt,
             "tea_cache_l1_thresh": tea_cache_l1_thresh, "tea_cache_model_id": tea_cache_model_id, "num_inference_steps": num_inference_steps,
+            "positive": False,
         }
         inputs_shared = {
             "input_image": input_image,
@@ -262,6 +264,7 @@ class KairosVideoPipeline(BasePipeline):
         }
         for unit in self.units:
             inputs_shared, inputs_posi, inputs_nega = self.unit_runner(unit, self, inputs_shared, inputs_posi, inputs_nega)
+        inputs_shared["latents"].to(self.device)
 
         # Denoise
         self.load_models_to_device(self.in_iteration_models)
@@ -282,7 +285,13 @@ class KairosVideoPipeline(BasePipeline):
                 if cfg_merge:
                     noise_pred_posi, noise_pred_nega = noise_pred_posi.chunk(2, dim=0)
                 else:
+                    if 'first_frame_latents' in inputs_shared:
+                        first_frame_latents = inputs_shared.pop('first_frame_latents')
+                    else:
+                        first_frame_latents = None
                     noise_pred_nega = self.model_fn(**models, **inputs_shared, **inputs_nega, timestep=timestep)
+                    if first_frame_latents is not None:
+                        inputs_shared['first_frame_latents'] = first_frame_latents
                 noise_pred = noise_pred_nega + cfg_scale * (noise_pred_posi - noise_pred_nega)
             else:
                 noise_pred = noise_pred_posi
@@ -410,14 +419,17 @@ class WanVideoUnit_PromptEmbedder(PipelineUnit):
     def __init__(self):
         super().__init__(
             seperate_cfg=True,
+            input_params={"input_image": "input_image"},
             input_params_posi={"prompt": "prompt", "positive": "positive"},
             input_params_nega={"prompt": "negative_prompt", "positive": "positive"},
             onload_model_names=("text_encoder",)
         )
 
-    def process(self, pipe, prompt, positive) -> dict:
+    def process(self, pipe, prompt, positive, input_image=None) -> dict:
+        if positive is not None and not positive:
+            input_image = None
         pipe.load_models_to_device(self.onload_model_names)
-        prompt_emb, attn_mask = pipe.prompter.encode_prompt(prompt, positive=positive, device=pipe.device)
+        prompt_emb, attn_mask = pipe.prompter.encode_prompt(prompt, images=input_image, positive=positive, device=pipe.device)
         """
         NOTE: now we move this part outside in train.py, in order to switch it with other conditions
         if self.p_uncond > 0:
@@ -982,6 +994,7 @@ def model_fn_wan_video(
     use_gradient_checkpointing_offload: bool = False,
     control_camera_latents_input = None,
     fuse_vae_embedding_in_latents: bool = False,
+    first_frame_latents: Optional[torch.Tensor] = None,
     **kwargs,
 ):
     if sliding_window_size is not None and sliding_window_stride is not None:
@@ -1027,6 +1040,22 @@ def model_fn_wan_video(
     if motion_bucket_id is not None and motion_controller is not None:
         t_mod = t_mod + motion_controller(motion_bucket_id).unflatten(1, (6, dit.dim))
     context = dit.text_embedding(context)
+
+    if first_frame_latents is not None and dit.use_first_frame_cond:
+        # print(f'first_frame_latents: {first_frame_latents.shape}')
+        # shape: (b, c, t, h, w)
+        first_frame_latents = first_frame_latents.to(context.device)
+        img_context = dit.image_downsample(first_frame_latents.squeeze(2))
+        fb, fc, fh, fw = img_context.shape
+        img_context = img_context.flatten(2).transpose(-2, -1)
+        img_context = dit.image_embedding(img_context)
+        img_context = dit.image_pos_embed(img_context, h=fh, w=fw)
+        context = torch.cat([img_context, context], dim=1)
+        if context_mask is not None:
+            context_mask = torch.cat([
+                torch.ones(context.shape[0], img_context.shape[1], dtype=context_mask.dtype, device=context_mask.device), 
+                context_mask
+            ], dim=1)
 
     x = latents
     # Merged cfg

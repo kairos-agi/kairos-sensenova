@@ -26,7 +26,8 @@ Key highlights of Kairos 3.0 include:
 
 
 ## 🔥 Latest News
-* Dec 18, 2025: 👋 We have released the inference code of Kairos-sensenova-common-4B model. The checkpoints are coming soon. Stay tuned.
+* Jan 19, 2026: The 480p pretrained model of Kairos-sensenova-4B model is released. The 720p pretrained models and post-trained models will be released accordingly.  
+* Dec 18, 2025: 👋 We have released the inference code of Kairos-sensenova-4B model. 
 
 ## 📑 Open-source Plan
 - [x] Inference code
@@ -75,10 +76,10 @@ This hierarchical composition balances **local motion modeling**, **mid-range te
 
 ## Model Zoo
 
-| Models              | Download Links                                                                                                                              | Description |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------|-------------|
-| Kairos-sensenova-4B-pretrained    | release soon   | pretrained model |
-| Kairos-sensenova-4B-posttrained    | release soon  | posttrained model |
+| Models | Description |
+|--------------------| -------------|
+| <a href="xxxxx">Kairos-sensenova-4B-pretrained-480p</a>     | 480p pretrained model with 16fps |
+| Kairos-sensenova-4B-posttrained     | posttrained model |
 
 ## Run Kairos 3.0
 
@@ -147,7 +148,7 @@ Kairos-sensenova-4B supports `T2V`/`I2V`/`TI2V` mode, select mode by setting the
 > 💡 Tips: For more information of generating parameters, refer to `examples/kairos/example_*.json` and `__call__` function in the `kairos/pipelines/pipelines/kairos_video_pipeline.py`.
 
 
-##### Run Generation using single-GPU
+##### Run Generation using single-GPU without Prompt Rewriter
 > 💡 These command can run on a GPU with at least 80GB VRAM.
 
 - example of t2v inference
@@ -165,13 +166,26 @@ tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/ex
 tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_i2v.json output/i2v
 ```
 
-##### Run Generation using multi-GPUs
+
+##### Run Generation using multi-GPUs without Prompt Rewriter
 > 💡 These command can run on a GPU with at least 80GB VRAM.
 
 - example of multi-gpu inference
 ```bash
 tools/inference_multi_gpu.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_list.json output/multi_gpu
 ```
+
+##### Run Generation with Prompt Rewriter
+> 💡 These command can run on a GPU with at least 80GB VRAM.
+
+Adding the parameter `true` at the end of all the above commands will enable prompt rewriter.
+
+- example of t2v inference
+```
+tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_t2v.json output/t2v true
+```
+
+> 💡 Tips: other inference instructions are similar. See the `use_prompt_rewriter`  in  `tools/inference.py` and `tools/inference_multi_gpu.py` for details.
 
 
 ## Citation

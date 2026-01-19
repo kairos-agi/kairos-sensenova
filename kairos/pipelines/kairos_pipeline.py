@@ -1,3 +1,4 @@
+import copy
 import json
 import random
 import sys
@@ -88,12 +89,16 @@ class KairosPipeline(torch.nn.Module):
     def __call__(self, **kwargs):
 
         save_path = kwargs.pop('save_path', '~/tmp.mp4')
-        save_fps = kwargs.pop('save_fps', 16)
+        save_fps = kwargs.pop('save_fps', 24)
+
+        raw_prompt = kwargs.pop('raw_prompt', '')
+        raw_imgage = None
 
         if 'input_image' in kwargs and isinstance(kwargs['input_image'], str):
             if not kwargs['input_image']:
                 kwargs.pop('input_image')
             else:
+                raw_imgage = kwargs['input_image']
                 image = Image.open(kwargs['input_image'])
                 kwargs['input_image'] = [image]
 
@@ -109,6 +114,17 @@ class KairosPipeline(torch.nn.Module):
         else:
             save_video(video, save_path, fps=save_fps, quality=5)
         
+        # save meta info of generation
+        meta_info = copy.deepcopy(kwargs)
+        meta_info.pop('input_image', None)
+        meta_info['save_fps'] = save_fps
+        meta_info['raw_prompt'] = raw_prompt
+        meta_info['input_image'] = raw_imgage  if isinstance(raw_imgage, (str, type(None))) else '{}'.format(type(raw_imgage))
+        meta_info['save_path'] = save_path
+        meta_save_path = save_path + '.meta.json'
+        with open(meta_save_path, 'w') as f:
+            json.dump(meta_info, f, indent=4)
+
         return save_path
 
 

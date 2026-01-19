@@ -5,6 +5,7 @@ CONFIG="${1:-configs/kairos_4b/kairos_4b_config.py}"
 WEIGHT_PATH=${2:-"none"}
 INPUT_FILE=${3:-"examples/kairos/example_list.json"}
 OUTPUT_PATH=${4:-"output/multi"}
+PROMPT_REWRITER=${5:-"false"}
 
 CURR_FILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$(cd "${CURR_FILE_DIR}/.." && pwd)"
@@ -20,4 +21,5 @@ torchrun --nnodes=1  --master_port 29557 --nproc-per-node=2 \
         --config ${CONFIG} \
         --checkpoint ${WEIGHT_PATH} \
         --input_file ${INPUT_FILE} \
-        --output_dir ${OUTPUT_PATH}
+        --output_dir ${OUTPUT_PATH} \
+        --use_prompt_rewriter ${PROMPT_REWRITER}

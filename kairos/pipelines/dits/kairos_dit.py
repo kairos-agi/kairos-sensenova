@@ -34,33 +34,43 @@ except ModuleNotFoundError:
 from kairos.pipelines.builder import DITS
 
 
-def flash_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, num_heads: int, compatibility_mode=False, attn_mask=None, window_size=(-1, -1)):
+def flash_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, num_heads: int, 
+                    compatibility_mode=False, attn_mask=None, window_size=(-1, -1), return_attn_probs=False):
+    
+    # ***************************************
+    # debug code
+    # if DEBUG_CLOSE_FLASH_ATTN:
+    #     compatibility_mode = True
+    # debug code
+    # ***************************************
     if compatibility_mode or attn_mask is not None:
-        q = rearrange(q, "b s (n d) -> b n s d", n=num_heads)
-        k = rearrange(k, "b s (n d) -> b n s d", n=num_heads)
-        v = rearrange(v, "b s (n d) -> b n s d", n=num_heads)
+        q = rearrange(q, "b s n d -> b n s d")
+        k = rearrange(k, "b s n d -> b n s d")
+        v = rearrange(v, "b s n d -> b n s d")
         x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask)
-        x = rearrange(x, "b n s d -> b s (n d)", n=num_heads)
+        x = rearrange(x, "b n s d -> b s n d")
     elif FLASH_ATTN_3_AVAILABLE:
-        q = rearrange(q, "b s (n d) -> b s n d", n=num_heads)
-        k = rearrange(k, "b s (n d) -> b s n d", n=num_heads)
-        v = rearrange(v, "b s (n d) -> b s n d", n=num_heads)
-        x = flash_attn_interface.flash_attn_func(q, k, v, window_size=window_size)
-        if isinstance(x,tuple):
-            x = x[0]
-        x = rearrange(x, "b s n d -> b s (n d)", n=num_heads)
+        x = flash_attn_interface.flash_attn_func(
+            q, k, v, window_size=window_size,
+            return_attn_probs=return_attn_probs
+        )
+        if return_attn_probs:
+            x, probs = x[0], x[1]
+            return x, probs
     elif FLASH_ATTN_2_AVAILABLE:
-        q = rearrange(q, "b s (n d) -> b s n d", n=num_heads)
-        k = rearrange(k, "b s (n d) -> b s n d", n=num_heads)
-        v = rearrange(v, "b s (n d) -> b s n d", n=num_heads)
-        x = flash_attn.flash_attn_func(q, k, v, window_size=window_size)
-        x = rearrange(x, "b s n d -> b s (n d)", n=num_heads)
+        x = flash_attn.flash_attn_func(
+            q, k, v, window_size=window_size,
+            return_attn_probs=return_attn_probs
+        )
+        if return_attn_probs:
+            x, probs = x[0], x[1]
+            return x, probs
     elif SAGE_ATTN_AVAILABLE:
-        q = rearrange(q, "b s (n d) -> b n s d", n=num_heads)
-        k = rearrange(k, "b s (n d) -> b n s d", n=num_heads)
-        v = rearrange(v, "b s (n d) -> b n s d", n=num_heads)
+        q = rearrange(q, "b s n d -> b n s d")
+        k = rearrange(k, "b s n d -> b n s d")
+        v = rearrange(v, "b s n d -> b n s d")
         x = sageattn(q, k, v)
-        x = rearrange(x, "b n s d -> b s (n d)", n=num_heads)
+        x = rearrange(x, "b n s d -> b s n d")
     else:
         raise RuntimeError("do not use pytorch attention")
     return x
@@ -101,7 +111,6 @@ def rope_apply(x, freqs, num_heads):
     x_out = torch.view_as_real(x_out * freqs).flatten(2)
     return x_out.to(x.dtype)
 
-
 def rope_apply_for3d(x, num_frames, freqs, num_heads):
     B, L, D = x.shape
     x = rearrange(x, "b s (n d) -> b s n d", n=num_heads)
@@ -132,20 +141,25 @@ class AttentionModule(nn.Module):
     def __init__(self, num_heads):
         super().__init__()
         self.num_heads = num_heads
-
+        
     def forward(self, q, k, v, attn_mask=None, window_size=(-1, -1)):
+        q = rearrange(q, "b s (n d) -> b s n d", n=self.num_heads)
+        k = rearrange(k, "b s (n d) -> b s n d", n=self.num_heads)
+        v = rearrange(v, "b s (n d) -> b s n d", n=self.num_heads)
         x = flash_attention(q=q, k=k, v=v, num_heads=self.num_heads, attn_mask=attn_mask, window_size=window_size)
+        x = rearrange(x, "b s n d -> b s (n d)", n=self.num_heads)
         return x
 
 
 class SelfAttention(nn.Module):
-    def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3):
+    def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3, attend_k0=False):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.dilated_length = dilated_length
         self.window_size = window_size
+        self.attend_k0 = attend_k0
 
         self.q = nn.Linear(dim, dim)
         self.k = nn.Linear(dim, dim)
@@ -153,20 +167,26 @@ class SelfAttention(nn.Module):
         self.o = nn.Linear(dim, dim)
         self.norm_q = FusedRMSNorm(dim, eps=eps)
         self.norm_k = FusedRMSNorm(dim, eps=eps)
-
+        
         self.attn = AttentionModule(self.num_heads)
-
+    
     def extra_repr(self):
         return f'dilated_length={self.dilated_length}, window_size={self.window_size}'
-
+    
     def forward(self, x, f, freqs, L=1):
         dilated_length = self.dilated_length
         q = self.norm_q(self.q(x))
         k = self.norm_k(self.k(x))
         v = self.v(x)
-        q = rope_apply_for3d(q, f, freqs, self.num_heads)
-        k = rope_apply_for3d(k, f, freqs, self.num_heads)
+        q = rope_apply(q, freqs, self.num_heads)
+        k = rope_apply(k, freqs, self.num_heads)
+        # print(f"[{torch.distributed.get_rank()}] q pre:", q.shape)
         use_dilated = dilated_length > 1 and x.shape[1] // (dilated_length * L) > 1
+        
+        if self.attend_k0:
+            fk = k[:, :1]
+            fv = v[:, :1]
+
         if use_dilated:
             assert x.shape[1] % L == 0, "L should equal to the num of tokens per frame"
             pad_len = dilated_length * L - x.shape[1] % (dilated_length * L)
@@ -177,7 +197,33 @@ class SelfAttention(nn.Module):
             q = rearrange(q, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
             k = rearrange(k, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
             v = rearrange(v, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
-        x = self.attn(q, k, v, window_size=(L*self.window_size, L*self.window_size))
+            if self.attend_k0:
+                fk = fk.unsqueeze(1).expand(-1, dilated_length, -1, -1).flatten(0, 1)
+                fv = fv.unsqueeze(1).expand(-1, dilated_length, -1, -1).flatten(0, 1)
+        if not self.attend_k0:
+            x = self.attn(q, k, v, window_size=(L*self.window_size, L*self.window_size))
+        else:
+            q = rearrange(q, "b s (n d) -> b s n d", n=self.num_heads)
+            k = rearrange(k, "b s (n d) -> b s n d", n=self.num_heads)
+            v = rearrange(v, "b s (n d) -> b s n d", n=self.num_heads)
+            x, probs = flash_attention(
+                q=q, k=k, v=v, num_heads=self.num_heads, 
+                window_size=(L*self.window_size, L*self.window_size), return_attn_probs=True
+            )
+
+            fk = rearrange(fk, "b s (n d) -> b s n d", n=self.num_heads)
+            fv = rearrange(fv, "b s (n d) -> b s n d", n=self.num_heads)
+            fv_expand = fv.expand_as(q)
+            softmax_scale = 1.0 / math.sqrt(q.shape[-1])
+            logits0 = (q * fk).sum(dim=-1) * softmax_scale
+
+            probs = probs.transpose(1, 2)
+            lse_total = torch.logaddexp(probs, logits0.float())
+            w_swa = torch.exp(probs - lse_total).to(x.dtype).unsqueeze(-1)
+            w0 = torch.exp(logits0 - lse_total).to(x.dtype).unsqueeze(-1)
+
+            x = x * w_swa + fv_expand * w0
+            x = rearrange(x, "b s n d -> b s (n d)", n=self.num_heads)
         out = self.o(x)
         if use_dilated:
             out = rearrange(out, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)
@@ -239,7 +285,18 @@ class GateModule(nn.Module):
 
 
 class DiTBlock(nn.Module):
-    def __init__(self, has_image_input: bool, dim: int, num_heads: int, ffn_dim: int, eps: float = 1e-6, use_linear_attn = True, dilated_length=1, window_size=3):
+    def __init__(self, 
+        has_image_input: bool,
+        dim: int,
+        num_heads: int,
+        ffn_dim: int, 
+        eps: float = 1e-6,
+        use_linear_attn = True, 
+        dilated_length=1, 
+        window_size=3,
+        gateddeltanet_layer_idx = -1,
+        attend_k0=False,
+        ):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -247,9 +304,13 @@ class DiTBlock(nn.Module):
         self.use_linear_attn = use_linear_attn
 
         if self.use_linear_attn:
-            self.gated_delta = GatedDeltaNet(hidden_size=dim, num_heads=num_heads, mode='chunk', use_gate=True, norm_eps=eps)
+            assert gateddeltanet_layer_idx >= 0
+
+            self.gated_delta = GatedDeltaNet(hidden_size=dim, num_heads=num_heads, mode='chunk', use_gate=True, norm_eps=eps,layer_idx=gateddeltanet_layer_idx)
         else:
-            self.self_attn = SelfAttention(dim, num_heads, eps, dilated_length=dilated_length, window_size=window_size)
+            assert gateddeltanet_layer_idx == -1
+
+            self.self_attn = SelfAttention(dim, num_heads, eps, dilated_length=dilated_length, window_size=window_size, attend_k0=attend_k0)
 
         self.cross_attn = CrossAttention(
             dim, num_heads, eps, has_image_input=has_image_input)
@@ -337,6 +398,48 @@ class MLP(torch.nn.Module):
         return self.proj(x)
 
 
+def build_2d_sincos_pos_embed(embed_dim: int, h: int, w: int, device=None, dtype=None):
+    """
+    (1, h*w, embed_dim)  2D sin-cos positional embedding.
+    """
+    assert embed_dim % 4 == 0, "embed_dim must be divisible by 4."
+    device = device or "cpu"
+    dtype = dtype or torch.float32
+
+    y = torch.arange(h, device=device, dtype=dtype)
+    x = torch.arange(w, device=device, dtype=dtype)
+    yy, xx = torch.meshgrid(y, x, indexing="ij")  # (h, w)
+    yy = yy.reshape(-1)
+    xx = xx.reshape(-1)
+
+    dim_each = embed_dim // 2
+    omega = torch.arange(dim_each // 2, device=device, dtype=dtype)
+    omega = 1.0 / (10000 ** (omega / (dim_each // 2)))
+
+    out_y = yy[:, None] * omega[None, :]
+    out_x = xx[:, None] * omega[None, :]
+
+    pos_y = torch.cat([torch.sin(out_y), torch.cos(out_y)], dim=1)  # (h*w, dim_each)
+    pos_x = torch.cat([torch.sin(out_x), torch.cos(out_x)], dim=1)  # (h*w, dim_each)
+
+    pos = torch.cat([pos_y, pos_x], dim=1).unsqueeze(0)  # (1, h*w, embed_dim)
+    return pos
+
+
+
+class PosEmbed2D(nn.Module):
+    def __init__(self, embed_dim: int):
+        super().__init__()
+        self.embed_dim = embed_dim
+
+    def forward(self, x: torch.Tensor, h: int, w: int):
+        # x: (B, N, C), N = h*w
+        B, N, C = x.shape
+        assert C == self.embed_dim and N == h * w
+        pos = build_2d_sincos_pos_embed(C, h, w, device=x.device, dtype=torch.float32)
+        return x + pos.to(x.dtype)
+
+
 class Head(nn.Module):
     def __init__(self, dim: int, out_dim: int, patch_size: Tuple[int, int, int], eps: float):
         super().__init__()
@@ -379,7 +482,9 @@ class KairosDiT(torch.nn.Module):
         require_vae_embedding: bool = True,
         require_clip_embedding: bool = True,
         fuse_vae_embedding_in_latents: bool = False,
-        dilated_lengths = [1, 1, 6, 1]
+        dilated_lengths = [1, 1, 6, 1],
+        use_first_frame_cond: bool = False,
+        attend_k0=False,
     ):
         super().__init__()
         self.dim = dim
@@ -391,6 +496,7 @@ class KairosDiT(torch.nn.Module):
         self.require_vae_embedding = require_vae_embedding
         self.require_clip_embedding = require_clip_embedding
         self.fuse_vae_embedding_in_latents = fuse_vae_embedding_in_latents
+        self.use_first_frame_cond = use_first_frame_cond
 
         self.patch_embedding = nn.Conv3d(
             in_dim, dim, kernel_size=patch_size, stride=patch_size)
@@ -399,6 +505,14 @@ class KairosDiT(torch.nn.Module):
             ACT2CLS['silu'](),
             nn.Linear(dim, dim),
         )
+        if self.use_first_frame_cond:
+            # logging_once(f'use_first_frame_cond: {use_first_frame_cond}')
+            self.image_downsample = nn.Sequential(
+                nn.Conv2d(in_dim, dim, 3, stride=2, padding=1),
+                nn.Conv2d(dim, dim, 3, stride=2, padding=1),
+            )
+            self.image_embedding = MLP(dim, dim, has_pos_emb=False)
+            self.image_pos_embed = PosEmbed2D(dim)
         self.time_embedding = nn.Sequential(
             nn.Linear(freq_dim, dim),
             nn.SiLU(),
@@ -408,8 +522,19 @@ class KairosDiT(torch.nn.Module):
             nn.SiLU(), nn.Linear(dim, dim * 6)
         )
 
+        use_linear_attns = [(i + 1) % 4 == 0 for i in range(num_layers)]
+        gateddeltanet_layer_indexs = [-1 for _ in range(num_layers)]
+        gidx = 0
+        for i, vi in enumerate(use_linear_attns):
+            if vi:
+                gateddeltanet_layer_indexs[i] = gidx
+                gidx += 1
+
         self.blocks = nn.ModuleList([
-            DiTBlock(has_image_input, dim, num_heads, ffn_dim, eps, use_linear_attn=(i + 1) % 4 == 0, dilated_length=dilated_lengths[i % 4])
+            DiTBlock(has_image_input, dim, num_heads, ffn_dim, eps, use_linear_attn=(i + 1) % 4 == 0, dilated_length=dilated_lengths[i % 4],
+                    gateddeltanet_layer_idx=gateddeltanet_layer_indexs[i],
+                    attend_k0=attend_k0
+            )
             for i in range(num_layers)
         ])
         self.head = Head(dim, out_dim, patch_size, eps)
@@ -451,6 +576,7 @@ class KairosDiT(torch.nn.Module):
                 y: Optional[torch.Tensor] = None,
                 use_gradient_checkpointing: bool = False,
                 use_gradient_checkpointing_offload: bool = False,
+                first_frame_latent: Optional[torch.Tensor] = None,
                 **kwargs,
                 ):
 
@@ -459,6 +585,21 @@ class KairosDiT(torch.nn.Module):
         t_mod = self.time_projection(t).unflatten(1, (6, self.dim))
         context = self.text_embedding(context)
 
+        if first_frame_latents is not None and self.use_first_frame_cond:
+            # shape: (b, c, t, h, w)
+            first_frame_latents = first_frame_latents.to(context.device)
+            img_context = self.image_downsample(first_frame_latents.squeeze(2))
+            fb, fc, fh, fw = img_context.shape
+            img_context = img_context.flatten(2).transpose(-2, -1)
+            img_context = self.image_embedding(img_context)
+            img_context = self.image_pos_embed(img_context, h=fh, w=fw)
+            context = torch.cat([img_context, context], dim=1)
+            if context_mask is not None:
+                context_mask = torch.cat([
+                    torch.ones(context.shape[0], img_context.shape[1], dtype=context_mask.dtype, device=context_mask.device),
+                    context_mask
+                ], dim=1)
+        
         if self.has_image_input:
             x = torch.cat([x, y], dim=1)
             clip_embdding = self.img_emb(clip_feature)

@@ -1216,7 +1216,6 @@ class WanVideoVAE(nn.Module):
 
 
     def encode(self, videos, device, tiled=False, tile_size=(34, 34), tile_stride=(18, 16)):
-        videos = [video.to("cpu") for video in videos]
         hidden_states = []
         for video in videos:
             video = video.unsqueeze(0)
@@ -1233,7 +1232,6 @@ class WanVideoVAE(nn.Module):
 
 
     def decode(self, hidden_states, device, tiled=False, tile_size=(34, 34), tile_stride=(18, 16)):
-        hidden_states = [hidden_state.to("cpu") for hidden_state in hidden_states]
         videos = []
         for hidden_state in hidden_states:
             hidden_state = hidden_state.unsqueeze(0)
