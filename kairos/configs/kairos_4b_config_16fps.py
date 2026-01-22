@@ -10,7 +10,6 @@ prompt_rewriter_path = f'{KAIROS_MODEL_DIR}/Qwen/Qwen3-VL-8B-Instruct/'
 
 pipeline = dict(
     type='KairosEmbodiedAPI',
-    exec_mode='infer',
     pretrained_dit = pretrained_dit,
     pipeline_type='KairosEmbodiedPipeline',
     pipeline_args = dict(

@@ -7,7 +7,9 @@
     "height":1080,
     "width":1920,
     "num_frames":81,
-    "cfg_scale":8
+    "cfg_scale":8,
+    "use_prompt_rewriter": false,
+    "output_dir": "output/t2v" 
 }
 
 

@@ -24,7 +24,6 @@ class KairosEmbodiedAPI(torch.nn.Module):
     def __init__(
         self,
         config=MMConfig(dict(
-            exec_mode='infer',
             pipeline_type='KairosEmbodiedPipeline',
             pretrained_dit=None,
             vae_path=None,
@@ -38,49 +37,44 @@ class KairosEmbodiedAPI(torch.nn.Module):
         
         self._init_config = config
 
-        exec_mode = config.exec_mode
-
         pretrained_dit = config.get('pretrained_dit',None)
         pipeline_type = config.get('pipeline_type','KairosEmbodiedPipeline')
         pipeline_args = config.get('pipeline_args',dict())
         
-        if exec_mode == 'train':
-            raise NotImplementedError()
+        if pipeline_args:
+            dit_config = pipeline_args.pop('dit_config', None)
+            load_dit_fn=pipeline_args.pop('load_dit_fn', None)
         else:
-            if pipeline_args:
-                dit_config = pipeline_args.pop('dit_config', None)
-                load_dit_fn=pipeline_args.pop('load_dit_fn', None)
-            else:
-                dit_config = None
-                load_dit_fn=None
+            dit_config = None
+            load_dit_fn=None
 
-            if dit_config:
-                print('Init KairosDiT model with config: ', dit_config)
-                dit_type = dit_config.pop('dit_type')
-                dit_cls = DITS.get(dit_type)
-                dit = dit_cls(**dit_config)
-                total_params = sum(p.numel() for p in dit.parameters()) / 1e9
-                print(f"Total parameters of DiT: {total_params:.3f} B")
-                if pretrained_dit:
-                    if load_dit_fn == 'strict_load':
-                        print(f'using strict_load || Loading DiT from {pretrained_dit}')
-                        state_dict = load_state_dict(pretrained_dit)
-                        dit.load_state_dict(state_dict, strict=True)
-                    else:
-                        raise NotImplementedError()
-                    
-                dit = dit.bfloat16().cuda()
-                pipeline_args['dit'] = dit
+        if dit_config:
+            print('Init KairosDiT model with config: ', dit_config)
+            dit_type = dit_config.pop('dit_type')
+            dit_cls = DITS.get(dit_type)
+            dit = dit_cls(**dit_config)
+            total_params = sum(p.numel() for p in dit.parameters()) / 1e9
+            print(f"Total parameters of DiT: {total_params:.3f} B")
+            if pretrained_dit:
+                if load_dit_fn == 'strict_load':
+                    print(f'using strict_load || Loading DiT from {pretrained_dit}')
+                    state_dict = load_state_dict(pretrained_dit)
+                    dit.load_state_dict(state_dict, strict=True)
+                else:
+                    raise NotImplementedError()
+                
+            dit = dit.bfloat16().cuda()
+            pipeline_args['dit'] = dit
 
-            pipeline_cls = KAIROS_PROCESSOR.get(pipeline_type)
+        pipeline_cls = KAIROS_PROCESSOR.get(pipeline_type)
 
-            self.pipe = pipeline_cls.from_pretrained(
-                torch_dtype=torch_dtype, 
-                device=device,
-                **pipeline_args,
-            )
-            total_params = sum(p.numel() for p in self.pipe.parameters()) / 1e9
-            print(f"Total parameters of the whole model: {total_params:.3f} B")
+        self.pipe = pipeline_cls.from_pretrained(
+            torch_dtype=torch_dtype, 
+            device=device,
+            **pipeline_args,
+        )
+        total_params = sum(p.numel() for p in self.pipe.parameters()) / 1e9
+        print(f"Total parameters of the whole model: {total_params:.3f} B")
 
     def __call__(self, **kwargs):
 
@@ -97,7 +91,7 @@ class KairosEmbodiedAPI(torch.nn.Module):
                 raw_imgage = kwargs['input_image']
                 image = Image.open(kwargs['input_image'])
                 kwargs['input_image'] = [image]
-
+        
         video = self.pipe(**kwargs)
 
         base_dir = os.path.dirname(save_path)

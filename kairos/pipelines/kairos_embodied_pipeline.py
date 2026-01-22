@@ -68,26 +68,6 @@ class KairosEmbodiedPipeline(BasePipeline):
     def load_lora(self, module, path, alpha=1):
         raise NotImplementedError()
 
-    def training_loss(self, **inputs):
-        max_timestep_boundary = int(inputs.get("max_timestep_boundary", 1) * self.scheduler.num_train_timesteps)
-        min_timestep_boundary = int(inputs.get("min_timestep_boundary", 0) * self.scheduler.num_train_timesteps)
-
-        bs, _, T, H, W = inputs["input_latents"].shape
-        self.scheduler.set_timesteps(self.scheduler.num_train_timesteps, dynamic_shift_len=(H*W) // 4,
-                                     training=True, num_frames=T)
-
-        timestep_id = torch.randint(min_timestep_boundary, max_timestep_boundary, (1,))
-        timestep = self.scheduler.timesteps[timestep_id].to(dtype=self.torch_dtype, device=self.device)
-
-        inputs["latents"] = self.scheduler.add_noise(inputs["input_latents"], inputs["noise"], timestep)
-        training_target = self.scheduler.training_target(inputs["input_latents"], inputs["noise"], timestep)
-
-        noise_pred = self.model_fn(**inputs, timestep=timestep)
-
-        loss = torch.nn.functional.mse_loss(noise_pred.float(), training_target.float())
-        loss = loss * self.scheduler.training_weight(timestep)
-        return loss
-
     @staticmethod
     def from_pretrained(
         torch_dtype: torch.dtype = torch.bfloat16,

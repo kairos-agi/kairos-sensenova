@@ -9,24 +9,17 @@ from mmengine.dist import init_dist, get_dist_info
 import torch.distributed as dist
 from kairos.apis.builder import build_model_pipeline
 from kairos.modules.utils.prompt_rewriter import PromptRewriter
-import time
 import torch
 
 def parse_args():
     parser = argparse.ArgumentParser(description='TRAIN_MODEL_LOOP')
-    parser.add_argument('--config', default='', help='train config file path')
-    parser.add_argument('--checkpoint', default='', help='model checkpoint')
     parser.add_argument('--input_file', default='', help='input_file')
-    parser.add_argument('--output_dir', default='', help='output_dir')
-    parser.add_argument('--use_prompt_rewriter', default='false', help='use_prompt_rewriter')
 
     args = parser.parse_args()
 
     return args
 
 if __name__ == '__main__':
-    start = time.perf_counter()
-
     init_dist(launcher='pytorch')
     rank, world_size = get_dist_info()
  
@@ -34,8 +27,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    cfg_path = args.config
-    checkpoint = args.checkpoint
+    cfg_path = "kairos/configs/kairos_4b_config.py"
 
     if cfg_path == '':
         ValueError('config path is empty')
@@ -44,7 +36,7 @@ if __name__ == '__main__':
     input_file = args.input_file
     input_args_d = mmengine.load(input_file)
     
-    output_dir = args.output_dir
+    output_dir = input_args_d['output_dir']
     os.makedirs(output_dir, exist_ok=True)
     save_path = f'{output_dir}/output.mp4'
 
@@ -52,10 +44,7 @@ if __name__ == '__main__':
 
     cfg = Config.fromfile(cfg_path)
 
-    if checkpoint and checkpoint.lower() != 'none':
-        cfg.pipeline.pretrained_dit = checkpoint
-
-    use_prompt_rewriter = args.use_prompt_rewriter.lower().strip() in ['1', 'true', 'yes']
+    use_prompt_rewriter = input_args_d['use_prompt_rewriter']
     if use_prompt_rewriter:
         prompt_rewriter_path = cfg.prompt_rewriter_path
         prompt_rewriter = PromptRewriter(prompt_rewriter_path)
@@ -64,16 +53,7 @@ if __name__ == '__main__':
     pipeline = build_model_pipeline(cfg.pipeline)
     print('build pipeline done')
 
-    torch.cuda.synchronize()
-    end = time.perf_counter()
-
-    print(f'=======init cost {end - start} s =========')
-
     print('start infer ...')
-
-    torch.cuda.synchronize()
-    start = time.perf_counter()
-
     raw_prompt = input_args_d.get('prompt','')
     if raw_prompt.strip() != '':
         if use_prompt_rewriter:
@@ -86,13 +66,10 @@ if __name__ == '__main__':
 
         print('rewritten prompt from [{}] to [{}]'.format(raw_prompt, rewritten_prompt))
 
+    input_args_d.pop('output_dir')
+    input_args_d.pop('use_prompt_rewriter')
     pipeline(**input_args_d)
     print('infer done')
-
-    torch.cuda.synchronize()
-    end = time.perf_counter()
-
-    print(f'=======infer cost {end - start} s =========')
     
     if dist.is_initialized():
         dist.destroy_process_group()

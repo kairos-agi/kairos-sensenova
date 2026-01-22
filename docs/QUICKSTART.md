@@ -50,17 +50,17 @@ Kairos-sensenova-4B supports `T2V`/`I2V`/`TI2V` mode, select mode by setting the
 
 - example of t2v inference
 ```bash
-bash examples/inference.sh kairos/configs/kairos_4b_config.py none examples/example_t2v.json output/t2v
+bash examples/inference.sh examples/example_t2v.json
 ```
 
 - example of ti2v inference
 ```bash
-bash examples/inference.sh kairos/configs/kairos_4b_config.py none examples/example_ti2v.json output/ti2v
+bash examples/inference.sh examples/example_ti2v.json
 ```
 
 - example of i2v inference
 ```bash
-bash examples/inference.sh kairos/configs/kairos_4b_config.py none examples/example_i2v.json output/i2v
+bash examples/inference.sh xamples/example_i2v.json
 ```
 
 

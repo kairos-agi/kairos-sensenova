@@ -14,7 +14,7 @@ The official images are hosted on **GitHub Container Registry (GHCR)**.
 ## 🐳 Docker (recommended)
 
 - Registry: **GitHub Container Registry**
-- Image name: `ghcr.io/caohelei/kairos-sensenova`
+- Image name: `ghcr.io/kairos-agi/kairos-sensenova:v0.0.1`
 - Platform: Linux (CUDA-enabled)
 
 
@@ -25,7 +25,7 @@ echo ghp_xxxxxxxxxxxxxxxxx | docker login ghcr.io -u username --password-stdin
 ```
 - then pull image 
 ```bash
-docker pull ghcr.io/caohelei/kairos-sensenova:v0.0.1
+docker pull gghcr.io/kairos-agi/kairos-sensenova:v0.0.1
 ```
 
 ## 2. Create a container using Docker
@@ -33,7 +33,7 @@ docker pull ghcr.io/caohelei/kairos-sensenova:v0.0.1
 docker run --rm -it \
   --gpus all \
   -v $(pwd):/workspace \
-  ghcr.io/caohelei/kairos-sensenova:v0.0.1 \
+  ghcr.io/kairos-agi/kairos-sensenova:v0.0.1 \
   bash
 ```
 
