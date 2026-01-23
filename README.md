@@ -41,8 +41,8 @@ Key highlights of Kairos 3.0 include:
 * Dec 18, 2025: 👋 We have released the inference code of Kairos-sensenova-4B model. 
 
 ## 📑 Open-source Plan
-- [✓] Inference code
-- [✓] Checkpoints of the pretrained and post-trained models
+- [x] Inference code
+- [x] Checkpoints of the pretrained and post-trained models
 - [ ] Checkpoints of the distilled models
 - [ ] Technical report
 
