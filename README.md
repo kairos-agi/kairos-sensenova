@@ -1,7 +1,7 @@
 # Kairos 3.0
 
 <p align="center">
-    <img src="assets/kairos_logo.png" width="500"/>
+    <img src="assets/logo_kairos.png" width="500"/>
 <p>
 
 <p align="center">
