@@ -11,6 +11,7 @@ from kairos.apis.builder import build_model_pipeline
 from kairos.modules.utils.prompt_rewriter import PromptRewriter
 import torch
 from PIL import Image
+from kairos.modules.utils import save_video, save_image
 
 def parse_args():
     parser = argparse.ArgumentParser(description='TRAIN_MODEL_LOOP')
@@ -78,7 +79,7 @@ if __name__ == '__main__':
             input_args_d['input_image'] = [image]
 
     input_args_d.pop('raw_prompt', '') 
-    pipeline(**input_args_d)
+    video = pipeline(**input_args_d)
     print('infer done')
 
     # save video
