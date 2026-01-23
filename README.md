@@ -14,7 +14,7 @@ Hi, it’s **Kairos** here.
 
 Key highlights of Kairos 3.0 include:
 
-- 😀 **Temporally-Linear DiT Architecture**: Kairos 3.0 introduces a LinearDiT backbone that scales *linearly* with video length. By replacing quadratic temporal attention with a carefully designed hybrid of local and linear attentions, the model efficiently supports long video sequences while preserving temporal coherence.
+- 😀 **Temporally-Linear DiT Architecture**: Kairos 3.0 introduces a LinearDiT backbone that scales **linearly** with video length. By replacing quadratic temporal attention with a carefully designed hybrid of local and linear attentions, the model efficiently supports long video sequences while preserving temporal coherence.
 
 
 - 😊 **Physically Grounded and Causally Consistent Generation**: The DiT architecture is explicitly structured to respect temporal causality. Through gated linear attention, Kairos 3.0 propagates global state information across time, enabling stable object permanence, coherent interactions, and physically plausible event evolution.
@@ -22,7 +22,7 @@ Key highlights of Kairos 3.0 include:
 
 - 😋 **Complex and Long-Range Motion Modeling**: By interleaving sliding-window, dilated, and global linear attentions, Kairos 3.0 captures motion across multiple temporal scales—from fine-grained local dynamics to long-range dependencies spanning several seconds. This design enables the generation of complex, multi-stage motions with strong long-term consistency.
 
-- 😍 **Massive World Data**: Kairos 3.0 is trained on hundreds of millions of video clips spanning diverse domains and data sources, such as *human-centric manipulation* and *physical phenomenon*. We further design a high-quality data curation pipeline tailored for world modeling, emphasizing informative, physically meaningful, and temporally rich training samples.
+- 😍 **Massive World Data**: Kairos 3.0 is trained on hundreds of millions of video clips spanning diverse domains and data sources, such as **human-centric manipulation** and *physical phenomenon*. We further design a high-quality data curation pipeline tailored for world modeling, emphasizing informative, physically meaningful, and temporally rich training samples.
 
 ## 🎬 Video Results
 
@@ -33,16 +33,16 @@ Key highlights of Kairos 3.0 include:
 
 
 <p align="center">
-<em>Video generated on a single Nvidia A800.</em>
+<em style="font-family: Arial, sans-serif; font-size: 16px; font-style: italic; "> Broad river surges over grand waterfall. </em>
 </p>
 
 ## 🔥 Latest News
-* Jan 19, 2026: The 480p pretrained model of Kairos-sensenova-4B model is released. The 720p pretrained models and post-trained models will be released accordingly.  
+* Jan 19, 2026: The 480p pretrained model of Kairos-sensenova-4B is officially released. The 720p pretrained and post-trained models will follow sequentially.  
 * Dec 18, 2025: 👋 We have released the inference code of Kairos-sensenova-4B model. 
 
 ## 📑 Open-source Plan
-- [ ] Inference code
-- [ ] Checkpoints of the pretrained and post-trained models
+- [✓] Inference code
+- [✓] Checkpoints of the pretrained and post-trained models
 - [ ] Checkpoints of the distilled models
 - [ ] Technical report
 
@@ -118,8 +118,7 @@ Run Inference by following the instructions in
 If you find our work helpful, please cite us.
 
 ```
-@article{kairos,
-}
+@article{kairos,}
 ```
 
 ## License Agreement
@@ -128,7 +127,7 @@ This project is licensed under the Apache License, Version 2.0.  You may use, mo
 
 ## Acknowledgements
 
-We would like to thank the contributors to the [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) and [HuggingFace](https://huggingface.co) repositories, for their open research.
+We would like to thank the contributors to [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) and [HuggingFace](https://huggingface.co) for their open-source research contributions.
 
 
 
