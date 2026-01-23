@@ -2,9 +2,9 @@
 
 KAIROS_MODEL_DIR = 'models'
 
-pretrained_dit = f'{KAIROS_MODEL_DIR}/kairos-model/kairos-model.safetensors'
-text_encoder_path =  f'{KAIROS_MODEL_DIR}/Qwen2.5-VL-7B-Instruct'
-vae_path = f'{KAIROS_MODEL_DIR}/Wan2.1_VAE.pth' 
+pretrained_dit = f'{KAIROS_MODEL_DIR}/Kairos-model/kairos-model.safetensors'
+text_encoder_path =  f'{KAIROS_MODEL_DIR}/Qwen/Qwen2.5-VL-7B-Instruct/'
+vae_path = f'{KAIROS_MODEL_DIR}/Wan2.1-T2V-14B/Wan2.1_VAE.pth' 
 prompt_rewriter_path = f'{KAIROS_MODEL_DIR}/Qwen/Qwen3-VL-8B-Instruct/'
 
 pipeline = dict(

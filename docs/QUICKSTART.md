@@ -6,17 +6,19 @@ Download the required checkpoints and place them under a unified directory (e.g.
 ### Kairos checkpoint (Hugging Face)
 
 - Download **[Kairos-sensenova-4B-pretrained-480p](https://huggingface.co/kairos-agi/kairos-sensenova-common)** from Hugging Face  
-- Save to: `models/kairos-model/`
+- Save to: `models/Kairos-model/`
 
-### Text/VLM encoder checkpoints (ModelScope)
+### Text encoder model (ModelScope)
 
 - Download **[Qwen2.5-VL-7B-Instruct](https://modelscope.cn/models/Qwen/Qwen2.5-VL-7B-Instruct)** from ModelScope
 - Save to: `models/Qwen/Qwen2.5-VL-7B-Instruct/`
 
+### Prompt Rewriter model (ModelScope)
+
 - Download **[Qwen3-VL-8B-Instruct](https://modelscope.cn/models/Qwen/Qwen3-VL-8B-Instruct)** from ModelScope
 - Save to: `models/Qwen/Qwen3-VL-8B-Instruct/`
 
-### Video VAE checkpoint (ModelScope)
+### Video VAE model (ModelScope)
 
 - Download **[Wan2.1-T2V-14B](https://modelscope.cn/models/Wan-AI/Wan2.1-T2V-14B)**  from ModelScope
 - Save to: `models/Wan2.1-T2V-14B/`

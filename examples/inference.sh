@@ -1,6 +1,6 @@
 #!/bin/bash
 
-INPUT_FILE=${1:-"examples/kairos/example_t2v.json"}
+INPUT_FILE=${1:-"examples/example_t2v.json"}
 
 CURR_FILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$(cd "${CURR_FILE_DIR}/.." && pwd)"
