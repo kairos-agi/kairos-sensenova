@@ -10,6 +10,7 @@ import torch.distributed as dist
 from kairos.apis.builder import build_model_pipeline
 from kairos.modules.utils.prompt_rewriter import PromptRewriter
 import torch
+from PIL import Image
 
 def parse_args():
     parser = argparse.ArgumentParser(description='TRAIN_MODEL_LOOP')

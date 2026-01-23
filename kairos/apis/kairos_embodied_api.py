@@ -10,7 +10,6 @@ from tqdm import tqdm
 from mmengine import Config as MMConfig
 import time 
 import torch.distributed as dist
-from PIL import Image
 
 
 from kairos.modules.utils import save_video, save_image
