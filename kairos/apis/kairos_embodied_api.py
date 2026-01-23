@@ -76,43 +76,5 @@ class KairosEmbodiedAPI(torch.nn.Module):
         total_params = sum(p.numel() for p in self.pipe.parameters()) / 1e9
         print(f"Total parameters of the whole model: {total_params:.3f} B")
 
-    def __call__(self, **kwargs):
-
-        save_path = kwargs.pop('save_path', '~/tmp.mp4')
-        save_fps = kwargs.pop('save_fps', 24)
-
-        raw_prompt = kwargs.pop('raw_prompt', '')
-        raw_imgage = None
-
-        if 'input_image' in kwargs and isinstance(kwargs['input_image'], str):
-            if not kwargs['input_image']:
-                kwargs.pop('input_image')
-            else:
-                raw_imgage = kwargs['input_image']
-                image = Image.open(kwargs['input_image'])
-                kwargs['input_image'] = [image]
-        
-        video = self.pipe(**kwargs)
-
-        base_dir = os.path.dirname(save_path)
-        if not os.path.exists(base_dir):
-            os.makedirs(base_dir, exist_ok=True)
-            
-        if len(video) == 1:
-            save_path = save_path.replace('.mp4', '.jpg')
-            save_image(video[0], save_path)
-        else:
-            save_video(video, save_path, fps=save_fps, quality=5)
-        
-        # save meta info of generation
-        meta_info = copy.deepcopy(kwargs)
-        meta_info.pop('input_image', None)
-        meta_info['save_fps'] = save_fps
-        meta_info['raw_prompt'] = raw_prompt
-        meta_info['input_image'] = raw_imgage  if isinstance(raw_imgage, (str, type(None))) else '{}'.format(type(raw_imgage))
-        meta_info['save_path'] = save_path
-        meta_save_path = save_path + '.meta.json'
-        with open(meta_save_path, 'w') as f:
-            json.dump(meta_info, f, indent=4)
-
-        return save_path
+    def __call__(self, **kwargs):    
+        return self.pipe(**kwargs)

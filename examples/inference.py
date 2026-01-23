@@ -40,8 +40,6 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
     save_path = f'{output_dir}/output.mp4'
 
-    input_args_d['save_path'] = save_path
-
     cfg = Config.fromfile(cfg_path)
 
     use_prompt_rewriter = input_args_d['use_prompt_rewriter']
@@ -68,8 +66,27 @@ if __name__ == '__main__':
 
     input_args_d.pop('output_dir')
     input_args_d.pop('use_prompt_rewriter')
+
+    # open image
+    if 'input_image' in input_args_d and isinstance(input_args_d['input_image'], str):
+        if not input_args_d['input_image']:
+            input_args_d.pop('input_image')
+        else:
+            raw_imgage = input_args_d['input_image']
+            image = Image.open(input_args_d['input_image'])
+            input_args_d['input_image'] = [image]
+
+    input_args_d.pop('raw_prompt', '') 
     pipeline(**input_args_d)
     print('infer done')
+
+    # save video
+    save_fps = 16
+    if len(video) == 1:
+        save_path = save_path.replace('.mp4', '.jpg')
+        save_image(video[0], save_path)
+    else:
+        save_video(video, save_path, fps=save_fps, quality=5)
     
     if dist.is_initialized():
         dist.destroy_process_group()

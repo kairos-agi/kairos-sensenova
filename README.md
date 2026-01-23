@@ -29,7 +29,7 @@ Key highlights of Kairos 3.0 include:
 
 | TI2V | T2V | I2V |
 |:----:|:---:|:---:|
-| <img src="assets/videos/kairos_1080_24fps_ti2v.gif" width="320"/> | <img src="assets/videos/kairos_1080_24fps_t2v.gif" width="320"/> | <img src="assets/videos/kairos_1080_24fps_i2v.gif" width="320"/> |
+| <img src="assets/videos/kairos_demo_16fps_ti2v.gif" width="320"/> | <img src="assets/videos/kairos_demo_16fps_t2v.gif" width="320"/> | <img src="assets/videos/kairos_demo_16fps_i2v.gif" width="320"/> |
 
 
 <p align="center">
@@ -65,7 +65,7 @@ Kairos 3.0 is built upon a diffusion-based world modeling framework that integra
 
 ---
 
-### Hybrid Linear Attention
+### Hybrid Linear Attentionp
 
 <p align="center">
     <img src="assets/architecture_kairos.png" width="1000"/>
