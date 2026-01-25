@@ -1,0 +1,12 @@
+
+einops==0.8.1
+flash-linear-attention==0.4.0
+huggingface-hub==0.36.0
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+mmengine==0.10.7
+modelscope==1.26.0
+numpy==1.26.4
+numpydantic==1.6.11
+pillow==11.1.0
+transformers==4.57.1

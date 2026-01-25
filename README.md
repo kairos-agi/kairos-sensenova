@@ -14,24 +14,34 @@ Hi, it’s **Kairos** here.
 
 Key highlights of Kairos 3.0 include:
 
-- 😀 **Temporally-Linear DiT Architecture**: Kairos 3.0 introduces a LinearDiT backbone that scales *linearly* with video length. By replacing quadratic temporal attention with a carefully designed hybrid of local and linear attentions, the model efficiently supports long video sequences while preserving temporal coherence.
+- ⚡ **Temporally-Linear DiT Architecture**: Kairos 3.0 introduces a LinearDiT backbone that scales **linearly** with video length. By replacing quadratic temporal attention with a carefully designed hybrid of local and linear attentions, the model efficiently supports long video sequences while preserving temporal coherence.
 
 
-- 😊 **Physically Grounded and Causally Consistent Generation**: The DiT architecture is explicitly structured to respect temporal causality. Through gated linear attention, Kairos 3.0 propagates global state information across time, enabling stable object permanence, coherent interactions, and physically plausible event evolution.
+- 🎯 **Physically Grounded and Causally Consistent Generation**: The DiT architecture is explicitly structured to respect temporal causality. Through gated linear attention, Kairos 3.0 propagates global state information across time, enabling stable object permanence, coherent interactions, and physically plausible event evolution.
 
 
-- 😋 **Complex and Long-Range Motion Modeling**: By interleaving sliding-window, dilated, and global linear attentions, Kairos 3.0 captures motion across multiple temporal scales—from fine-grained local dynamics to long-range dependencies spanning several seconds. This design enables the generation of complex, multi-stage motions with strong long-term consistency.
+-  🔄 **Complex and Long-Range Motion Modeling**: By interleaving sliding-window, dilated, and global linear attentions, Kairos 3.0 captures motion across multiple temporal scales—from fine-grained local dynamics to long-range dependencies spanning several seconds. This design enables the generation of complex, multi-stage motions with strong long-term consistency.
 
-- 😍 **Massive World Data**: Kairos 3.0 is trained on hundreds of millions of video clips spanning diverse domains and data sources, such as *human-centric manipulation* and *physical phenomenon*. We further design a high-quality data curation pipeline tailored for world modeling, emphasizing informative, physically meaningful, and temporally rich training samples.
+- 📊 **Massive World Data**: Kairos 3.0 is trained on hundreds of millions of video clips spanning diverse domains and data sources, such as **human-centric manipulation** and *physical phenomenon*. We further design a high-quality data curation pipeline tailored for world modeling, emphasizing informative, physically meaningful, and temporally rich training samples.
 
+## 🎬 Video Results
+
+| TI2V | T2V | I2V |
+|:----:|:---:|:---:|
+| <img src="assets/videos/kairos_demo_16fps_ti2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_16fps_t2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_16fps_i2v.gif" width="240"/> |
+
+
+<p align="center">
+<em style="font-family: Arial, sans-serif; font-size: 16px; font-style: italic; "> Broad river surges over grand waterfall. </em>
+</p>
 
 ## 🔥 Latest News
-* Jan 19, 2026: The 480p pretrained model of Kairos-sensenova-4B model is released. The 720p pretrained models and post-trained models will be released accordingly.  
+* Jan 19, 2026: The 480p pretrained model of Kairos-sensenova-4B is officially released. The 720p pretrained and post-trained models will follow sequentially.  
 * Dec 18, 2025: 👋 We have released the inference code of Kairos-sensenova-4B model. 
 
 ## 📑 Open-source Plan
 - [x] Inference code
-- [ ] Checkpoints of the pretrained and post-trained models
+- [x] Checkpoints of the pretrained and post-trained models
 - [ ] Checkpoints of the distilled models
 - [ ] Technical report
 
@@ -54,7 +64,7 @@ Kairos 3.0 is built upon a diffusion-based world modeling framework that integra
 
 ---
 
-### Hybrid Linear Attention
+### Hybrid Linear Attentionp
 
 <p align="center">
     <img src="assets/architecture_kairos.png" width="1000"/>
@@ -83,117 +93,31 @@ This hierarchical composition balances **local motion modeling**, **mid-range te
 
 ## Run Kairos 3.0
 
-#### Installation
-Clone the repo:
+### Clone the repo:
 ```bash
 git clone https://github.com/kairos-agi/kairos-sensenova.git
 cd kairos-sensenova
 ```
 
-Install dependencies:
-```bash
-# Ensure torch >= 2.4.0
-# recommend python==3.10.12&&torch==2.6.0&&cuda==12.6
+### Environment Setup
 
-# 1. install torch fisrst
-# ref to https://pytorch.org/get-started/locally/
+Prepare your runtime environment by following the instructions in  
+[`docker/DOCKER.md`](docker/DOCKER.md).
 
-# 2. install flash-attn & einops
-pip install einops==0.8.1 psutil
-pip install flash-attn==2.6.3 --no-build-isolatio
-
-# 3. install apex
-# ref to https://github.com/NVIDIA/apex
-
-# 4. install other requirements 
-pip install -r requirements/requirements.txt
-
-```
+> **Note**  
+> The provided Docker environment is built and validated on Ampere NVIDIA GPUs with large memory capacity (e.g., A100/A800-class architectures).  
+> A GPU with approximately **80 GB VRAM** is recommended, as video generation workloads are memory intensive.
 
 
-
-
-
-#### Model Inference
-
-##### prepare inference configs 
-Kairos-sensenova-4B supports `T2V`/`I2V`/`TI2V` mode, select mode by setting the value of `prompt` and `input_image`. The main differences among these modes are shown below.
-```python
-# parameters for generating a sample is a dictionary.
-
-# mode: t2v
-{
-    "prompt":"your prompt here",
-    "input_image":"",
-    "negative_prompt" : "",
-    # other args ...
-}
-
-# mode: ti2v
-{
-    "prompt":"your prompt here",
-    "input_image":"examples/kairos/demo_image.jpg",
-    "negative_prompt" : "",
-    # other args ...
-}
-
-# mode: i2v
-{
-    "prompt":"",
-    "input_image":"examples/kairos/demo_image.jpg",
-    "negative_prompt" : "",
-    # other args ...
-}
-```
-> 💡 Tips: For more information of generating parameters, refer to `examples/kairos/example_*.json` and `__call__` function in the `kairos/pipelines/pipelines/kairos_video_pipeline.py`.
-
-
-##### Run Generation using single-GPU without Prompt Rewriter
-> 💡 These command can run on a GPU with at least 80GB VRAM.
-
-- example of t2v inference
-```bash
-tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_t2v.json output/t2v
-```
-
-- example of ti2v inference
-```bash
-tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_ti2v.json output/ti2v
-```
-
-- example of i2v inference
-```bash
-tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_i2v.json output/i2v
-```
-
-
-##### Run Generation using multi-GPUs without Prompt Rewriter
-> 💡 These command can run on a GPU with at least 80GB VRAM.
-
-- example of multi-gpu inference
-```bash
-tools/inference_multi_gpu.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_list.json output/multi_gpu
-```
-
-##### Run Generation with Prompt Rewriter
-> 💡 These command can run on a GPU with at least 80GB VRAM.
-
-Adding the parameter `true` at the end of all the above commands will enable prompt rewriter.
-
-- example of t2v inference
-```
-tools/inference.sh configs/kairos_4b/kairos_4b_config.py none examples/kairos/example_t2v.json output/t2v true
-```
-
-> 💡 Tips: other inference instructions are similar. See the `use_prompt_rewriter`  in  `tools/inference.py` and `tools/inference_multi_gpu.py` for details.
-
+### Run Inference
+Run Inference by following the instructions in  
+[`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
 ## Citation
 If you find our work helpful, please cite us.
 
 ```
-@article{kairos,
-}
+@article{kairos,}
 ```
 
 ## License Agreement
@@ -202,7 +126,7 @@ This project is licensed under the Apache License, Version 2.0.  You may use, mo
 
 ## Acknowledgements
 
-We would like to thank the contributors to the [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) and [HuggingFace](https://huggingface.co) repositories, for their open research.
+We would like to thank the contributors to [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) and [HuggingFace](https://huggingface.co) for their open-source research contributions.
 
 
 
