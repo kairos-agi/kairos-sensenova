@@ -25,7 +25,7 @@ echo ghp_xxxxxxxxxxxxxxxxx | docker login ghcr.io -u username --password-stdin
 ```
 - then pull image 
 ```bash
-docker pull gghcr.io/kairos-agi/kairos-sensenova:v0.0.1
+docker pull ghcr.io/kairos-agi/kairos-sensenova:v0.0.1
 ```
 
 ## 2. Create a container using Docker
