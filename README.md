@@ -28,7 +28,7 @@ Key highlights of Kairos 3.0 include:
 
 | TI2V | T2V | I2V |
 |:----:|:---:|:---:|
-| <img src="assets/videos/kairos_demo_16fps_ti2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_16fps_t2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_16fps_i2v.gif" width="240"/> |
+| <img src="assets/videos/kairos_demo_ti2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_t2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_i2v.gif" width="240"/> |
 
 
 <p align="center">
