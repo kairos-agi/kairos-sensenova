@@ -64,7 +64,7 @@ Kairos 3.0 is built upon a diffusion-based world modeling framework that integra
 
 ---
 
-### Hybrid Linear Attentionp
+### Hybrid Linear Attention
 
 <p align="center">
     <img src="assets/architecture_kairos.png" width="1000"/>
