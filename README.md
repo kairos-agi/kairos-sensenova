@@ -129,14 +129,14 @@ We enhance the inference computational efficiency of the Kairos 3.0 model on var
 ### Performance Benchmarks
 The bar charts below illustrate relative latency improvements across optimization stages. Replace the placeholder values with your official measurements.
 
-**A800: Optimization Efficiency (Latency in seconds)**
+**A100/A800: Optimization Process (Latency in seconds)**
 
 <div align="center">
 <img src="assets/acceleration_decomposition.png" width="93%"/>
 </div>
 
 
-**RTX 5090: Optimization Efficiency (Latency in seconds)**
+**RTX 5090: Optimization Process (Latency in seconds)**
 
 
 <div align="center">
@@ -144,15 +144,45 @@ The bar charts below illustrate relative latency improvements across optimizatio
 </div>
 
 
-**Computational Efficiency of Kairos 3.0**
+**Performance Benchmark of Kairos 3.0**
 
 *(Time (s) / Peak Memory (GB))*
 
-| GPU         | Model          | Resolution | Number of GPUs       |              |              |
-|-------------|----------------|------------|----------------------|--------------|--------------|
-|             |                |            | 1                    | 4            | 8            |
-| 5090        | Kairos-4B TI2V | 720P       | 534.7/22.9           | 231.3/22.6   | 157.2/22.6   |
-| A100/A800   | Kairos-4B TI2V | 720P       | ...                  | ...          | ...          |
+<div align="center">
+<table style="text-align: center; margin: 0 auto;">
+    <thead>
+        <tr>
+            <th rowspan="2" style="text-align: center;">GPU</th>
+            <th rowspan="2" style="text-align: center;">Model</th>
+            <th rowspan="2" style="text-align: center;">Resolution</th>
+            <th colspan="3" style="text-align: center;">Number of GPUs</th>
+        </tr>
+        <tr>
+            <th style="text-align: center;">1</th>
+            <th style="text-align: center;">4</th>
+            <th style="text-align: center;">8</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="text-align: center;">5090</td>
+            <td style="text-align: center;">Kairos-4B TI2V</td>
+            <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">534.7/22.9</td>
+            <td style="text-align: center;">231.3/22.6</td>
+            <td style="text-align: center;">157.2/22.6</td>
+        </tr>
+        <tr>
+            <td style="text-align: center;">A100/A800</td>
+            <td style="text-align: center;">Kairos-4B TI2V</td>
+            <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+        </tr>
+    </tbody>
+</table>
+</div>
 
 ## Citation
 If you find our work helpful, please cite us.
