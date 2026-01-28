@@ -113,6 +113,47 @@ Prepare your runtime environment by following the instructions in
 Run Inference by following the instructions in  
 [`docs/QUICKSTART.md`](docs/QUICKSTART.md).
 
+## 📈 Inference Performance
+
+### Inference Optimization Strategy
+
+We enhance the inference computational efficiency of the Kairos 3.0 model on various mainstream architecture chips(Ampere/Hopper/Blackwell) via a multi-faceted optimization approach, encompassing offloading optimization, quantization, scheduling policies, parallelization, and operator fusion strategies. To fulfill practical application scenarios, detailed optimization methodologies and performance evaluations are elaborated in the sections below.
+
+### Optimization Measures
+- **CPU OffLoad**: offload selected weights/activations to host memory to fit larger models on limited VRAM.
+- **W8A8 Quantization**: apply 8-bit weight/activation quantization to reduce memory footprint and improve throughput.
+- **TeaCache Scheduling**: reuse cached intermediate states across diffusion steps to cut redundant computation and improve stability.
+- **SP/TP Parallelism**: sequence/tensor parallel execution to scale throughput at higher batch sizes and longer sequences.
+- **Operator Fusion**: fuse common kernels to reduce launch overhead and improve utilization.
+
+### Performance Benchmarks
+The bar charts below illustrate relative latency improvements across optimization stages. Replace the placeholder values with your official measurements.
+
+**A800: Optimization Efficiency (Latency in seconds)**
+
+<div align="center">
+<img src="assets/acceleration_decomposition.png" width="93%"/>
+</div>
+
+
+**RTX 5090: Optimization Efficiency (Latency in seconds)**
+
+
+<div align="center">
+<img src="assets/acceleration_decomposition.png" width="93%"/>
+</div>
+
+
+**Computational Efficiency of Kairos 3.0**
+
+*(Time (s) / Peak Memory (GB))*
+
+| GPU         | Model          | Resolution | Number of GPUs       |              |              |
+|-------------|----------------|------------|----------------------|--------------|--------------|
+|             |                |            | 1                    | 4            | 8            |
+| 5090        | Kairos-4B TI2V | 720P       | 534.7/22.9           | 231.3/22.6   | 157.2/22.6   |
+| A100/A800   | Kairos-4B TI2V | 720P       | ...                  | ...          | ...          |
+
 ## Citation
 If you find our work helpful, please cite us.
 
