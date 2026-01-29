@@ -32,7 +32,11 @@ except ModuleNotFoundError:
     pass
 
 from kairos.apis.builder import DITS
-
+from torch.distributed import ProcessGroup, get_process_group_ranks
+from kairos.modules.dits.fla_local.layers.gated_deltanet_with_tp import GatedDeltaNet as GatedDeltaNetWithTP
+from kairos.modules.dits.fla_local.models.utils import Cache as fla_Cahce
+import torch.distributed as dist
+from kairos.modules.utils import parallel_state
 
 def flash_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, num_heads: int, 
                     compatibility_mode=False, attn_mask=None, window_size=(-1, -1), return_attn_probs=False):
@@ -180,7 +184,6 @@ class SelfAttention(nn.Module):
         v = self.v(x)
         q = rope_apply(q, freqs, self.num_heads)
         k = rope_apply(k, freqs, self.num_heads)
-        # print(f"[{torch.distributed.get_rank()}] q pre:", q.shape)
         use_dilated = dilated_length > 1 and x.shape[1] // (dilated_length * L) > 1
         
         if self.attend_k0:
@@ -231,6 +234,173 @@ class SelfAttention(nn.Module):
                 out = out[:, :-pad_len]
         return out
 
+class TPLinearFullWeight(nn.Module):
+    def __init__(self, in_dim, out_dim, tp_group = None):
+        super().__init__()
+
+        self.current_device = torch.cuda.current_device()
+
+        self.tp_group = tp_group
+        self.tp_rank = dist.get_rank(tp_group)
+        self.tp_size = dist.get_world_size(tp_group)
+        assert out_dim % self.tp_size == 0
+        self.shard = out_dim // self.tp_size
+        
+        full = torch.empty(out_dim, in_dim, device=None, dtype=None)
+        nn.init.kaiming_uniform_(full, a=math.sqrt(5))
+
+        full_t = full.to(device=self.current_device) # 默认的 dtype=torch.float32
+
+        # no need to broadcast if all rand seeds are aligned
+        dist.broadcast(full_t, src=0, group=self.tp_group)
+        full = full_t.cpu()
+        # only keep shard as parameter
+        self.weight = nn.Parameter(full)
+
+        # --- Bias 初始化 ---
+        full_b = torch.empty(out_dim)
+        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        nn.init.uniform_(full_b, -bound, bound)
+        full_b_t = full_b.to(device=self.current_device)
+        dist.broadcast(full_b_t, src=0, group=self.tp_group)
+        full_b = full_b_t.cpu()
+        self.bias = nn.Parameter(full_b)
+
+        def backward_hook(grad):
+            if grad is None:
+                return None
+            dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tp_group)
+            
+            # grad_fp32 = grad.to(torch.float32)
+            # dist.all_reduce(grad_fp32, op=dist.ReduceOp.SUM, group=self.tp_group)
+            # grad = grad_fp32.to(grad.dtype)
+            return grad
+        
+        self.weight.register_hook(backward_hook)
+        self.bias.register_hook(backward_hook)
+
+    def forward(self, x):
+        start = self.tp_rank * self.shard
+        end = start + self.shard
+
+        w_shard = self.weight[start:end]
+        b_shard = self.bias[start:end]
+        
+        # return F.linear(x, w_shard, b_shard)
+        return _ColumnParallelElement.apply(x, w_shard, b_shard, self.tp_group)
+    
+class _ColumnParallelElement(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, weight, bias, tp_group):
+        ctx.save_for_backward(input, weight)
+        ctx.tp_group = tp_group
+        ctx.use_bias = bias is not None
+
+        output = F.linear(input, weight, bias)
+
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        input, weight = ctx.saved_tensors
+        tp_group = ctx.tp_group
+        
+        grad_output_2d = grad_output.reshape(-1, grad_output.shape[-1])
+        input_2d = input.reshape(-1, input.shape[-1])
+
+        grad_weight = grad_output_2d.t().matmul(input_2d)
+
+        grad_bias = None
+        if ctx.use_bias and ctx.needs_input_grad[2]:
+            grad_bias = grad_output_2d.sum(dim=0)
+
+        grad_input = grad_output.matmul(weight)
+
+        dist.all_reduce(grad_input, op=dist.ReduceOp.SUM, group=tp_group)
+
+        return grad_input, grad_weight, grad_bias, None
+
+class SelfAttentionTP(nn.Module):
+    def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3):
+        super().__init__()
+        self.dim = dim
+        self.num_heads = num_heads
+
+        self.tp_group = parallel_state.get_context_parallel_group()
+        self.tp_size = parallel_state.get_context_parallel_world_size()
+    
+        assert num_heads % self.tp_size == 0, "num_heads must be divisible by tp_size"
+        self.num_heads_local = num_heads // self.tp_size
+        self.head_dim = dim // num_heads
+        self.inner_dim = self.num_heads_local * self.head_dim  
+
+        self.dilated_length = dilated_length
+        self.window_size = window_size
+
+        self.q = TPLinearFullWeight(dim, dim, tp_group=self.tp_group)
+        self.k = TPLinearFullWeight(dim, dim, tp_group=self.tp_group)
+        self.v = TPLinearFullWeight(dim, dim, tp_group=self.tp_group)
+    
+        self.o = nn.Linear(dim, dim)
+
+        self.norm_q = FusedRMSNorm(dim, eps=eps)
+        self.norm_k = FusedRMSNorm(dim, eps=eps)
+
+        self.attn = AttentionModule(self.num_heads_local)
+
+    def extra_repr(self):
+        return f'dilated_length={self.dilated_length}, window_size={self.window_size}, tp_size={self.tp_size}'
+
+    def forward(self, x, f, freqs, L=1):
+        dilated_length = self.dilated_length
+    
+        l_q = self.q(x)
+        l_k = self.k(x)
+
+        # split_x -> full_x
+        l_q = _gather_input_tp(l_q, self.tp_group)
+        l_k = _gather_input_tp(l_k, self.tp_group)
+        
+        q = self.norm_q(l_q)
+        k = self.norm_k(l_k)
+
+        # full_x -> split_x
+        q = _distribute_input_tp(q, self.tp_group)
+        k = _distribute_input_tp(k, self.tp_group)
+
+        v = self.v(x)
+    
+        q = rope_apply_for3d(q, f, freqs, self.num_heads_local)
+        k = rope_apply_for3d(k, f, freqs, self.num_heads_local)
+
+        use_dilated = dilated_length > 1 and x.shape[1] // (dilated_length * L) > 1
+    
+        if use_dilated:     
+            assert x.shape[1] % L == 0, "L should equal to the num of tokens per frame"
+            pad_len = dilated_length * L - x.shape[1] % (dilated_length * L)
+            if pad_len != 0:
+                q = F.pad(q, (0, 0, 0, pad_len))
+                k = F.pad(k, (0, 0, 0, pad_len))
+                v = F.pad(v, (0, 0, 0, pad_len))
+        
+            q = rearrange(q, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
+            k = rearrange(k, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
+            v = rearrange(v, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
+
+        x = self.attn(q, k, v, window_size=(L*self.window_size, L*self.window_size))
+        
+        # split_x -> full_x
+        x = _gather_input_tp(x, self.tp_group)
+
+        out = self.o(x)
+    
+        if use_dilated:
+            out = rearrange(out, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)
+            if pad_len != 0:
+                out = out[:, :-pad_len]
+        
+        return out
 
 class CrossAttention(nn.Module):
     def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, has_image_input: bool = False):
@@ -276,6 +446,83 @@ class CrossAttention(nn.Module):
         return self.o(x)
 
 
+def _distribute_input_sp(x, context_group):
+    """将输入分发到多个GPU"""
+
+    context_group_world_size = dist.get_world_size(group=context_group)
+    context_group_rank = dist.get_rank(group=context_group)
+    if context_group_world_size <= 1:
+        return x
+        
+    B, N, D = x.shape
+    
+    assert N % context_group_world_size == 0, 'cannot split tensor {} vs {}'.format(x.shape, context_group_world_size)
+
+    local_dim = N // context_group_world_size
+    start_idx = context_group_rank * local_dim
+    end_idx = start_idx + local_dim if context_group_rank != context_group_world_size - 1 else N
+    
+    # local_x = x[:, start_idx:end_idx, :].contiguous()
+    local_x = x[:, start_idx:end_idx, :].contiguous()
+    
+    return local_x
+
+def _gather_input_sp(x, context_group):
+    context_group_world_size = dist.get_world_size(group=context_group)
+    context_group_rank = dist.get_rank(group=context_group)
+    if context_group_world_size <= 1:
+        return x
+    
+    B, N_local, D = x.shape
+    start_idx = context_group_rank * N_local
+    end_idx = start_idx + N_local
+
+    full_output = torch.zeros(B, N_local * context_group_world_size, D, 
+                                device=x.device,
+                                dtype=x.dtype)
+    full_output[:, start_idx:end_idx, :] = x
+    dist.all_reduce(full_output, op=dist.ReduceOp.SUM, group=context_group)
+
+    return full_output
+
+def _distribute_input_tp(x, context_group):
+    """将输入分发到多个GPU"""
+
+    context_group_world_size = dist.get_world_size(group=context_group)
+    context_group_rank = dist.get_rank(group=context_group)
+    if context_group_world_size <= 1:
+        return x
+        
+    B, N, D = x.shape
+    
+    assert D % context_group_world_size == 0, 'cannot split tensor {} vs {}'.format(x.shape, context_group_world_size)
+
+    local_dim = D // context_group_world_size
+    start_idx = context_group_rank * local_dim
+    end_idx = start_idx + local_dim if context_group_rank != context_group_world_size - 1 else D
+    
+    local_x = x[:, :, start_idx:end_idx].contiguous()
+    
+    return local_x
+
+def _gather_input_tp(x, context_group):
+    context_group_world_size = dist.get_world_size(group=context_group)
+    context_group_rank = dist.get_rank(group=context_group)
+    if context_group_world_size <= 1:
+        return x
+    
+    B, N, D_local = x.shape
+    start_idx = context_group_rank * D_local
+    end_idx = start_idx + D_local
+
+    full_output = torch.zeros(B, N , D_local * context_group_world_size,
+                                device=x.device,
+                                dtype=x.dtype)
+    full_output[:, :, start_idx:end_idx] = x
+    dist.all_reduce(full_output, op=dist.ReduceOp.SUM, group=context_group)
+
+    return full_output
+
 class GateModule(nn.Module):
     def __init__(self,):
         super().__init__()
@@ -294,7 +541,15 @@ class DiTBlock(nn.Module):
         use_linear_attn = True, 
         dilated_length=1, 
         window_size=3,
+        # *************************
+        # seq parallel params
+        block_idx=-1,
         gateddeltanet_layer_idx = -1,
+        is_first_block=False,
+        is_last_block=False,
+        use_seq_parallel=False,
+        use_tp_in_getaeddeltanet=False,
+        use_tp_in_self_attn=False,
         attend_k0=False,
         ):
         super().__init__()
@@ -303,14 +558,57 @@ class DiTBlock(nn.Module):
         self.ffn_dim = ffn_dim
         self.use_linear_attn = use_linear_attn
 
+        self.block_idx=block_idx
+        self.is_first_block=is_first_block
+        self.is_last_block=is_last_block
+        self.use_seq_parallel=use_seq_parallel
+        self.use_tp_in_getaeddeltanet = use_tp_in_getaeddeltanet
+        self.use_tp_in_self_attn = use_tp_in_self_attn
+
+        if self.use_seq_parallel or use_tp_in_getaeddeltanet or use_tp_in_self_attn:
+            self.context_group_rank = parallel_state.get_context_parallel_rank()
+            self.context_group_size = parallel_state.get_context_parallel_world_size()
+            self.context_group = parallel_state.get_context_parallel_group()
+        else:
+            self.context_group_rank = 0  # 单卡/单机非分布式场景默认rank为0
+            self.context_group_size = 1  # 单卡/单机非分布式场景默认world_size为1
+            self.context_group = None
+
+        if is_first_block:
+            print(f'{self.__class__.__name__} use_seq_parallel: {use_seq_parallel} context_group_size: {self.context_group_size}')
+
         if self.use_linear_attn:
             assert gateddeltanet_layer_idx >= 0
 
-            self.gated_delta = GatedDeltaNet(hidden_size=dim, num_heads=num_heads, mode='chunk', use_gate=True, norm_eps=eps,layer_idx=gateddeltanet_layer_idx)
+            # getaeddeltanet用tp并行
+            if self.use_tp_in_getaeddeltanet:
+                self.gated_delta = GatedDeltaNetWithTP(
+                    hidden_size=dim,
+                    num_heads=num_heads,
+                    mode="chunk",
+                    use_gate=True,
+                    norm_eps=eps,
+                    tp_num_splits=self.context_group_size,
+                    tp_group=self.context_group,
+                    layer_idx=gateddeltanet_layer_idx,
+                )
+            else:
+                self.gated_delta = GatedDeltaNet(hidden_size=dim,
+                                                num_heads=num_heads,
+                                                mode='chunk',
+                                                use_gate=True,
+                                                norm_eps=eps,
+                                                layer_idx=gateddeltanet_layer_idx
+                                                )
         else:
             assert gateddeltanet_layer_idx == -1
-
-            self.self_attn = SelfAttention(dim, num_heads, eps, dilated_length=dilated_length, window_size=window_size, attend_k0=attend_k0)
+            if self.use_tp_in_self_attn:
+                # self_attention用tp并行
+                if attend_k0:
+                    raise NotImplementedError('SelfAttentionTP not support attend_k0 yet!!!')
+                self.self_attn = SelfAttentionTP(dim, num_heads, eps, dilated_length=dilated_length, window_size=window_size)
+            else:
+                self.self_attn = SelfAttention(dim, num_heads, eps, dilated_length=dilated_length, window_size=window_size, attend_k0=attend_k0)
 
         self.cross_attn = CrossAttention(
             dim, num_heads, eps, has_image_input=has_image_input)
@@ -342,21 +640,28 @@ class DiTBlock(nn.Module):
                 scale_msa.squeeze(2), shift_msa.squeeze(2), gate_msa.squeeze(2),
                 scale_mlp.squeeze(2), shift_mlp.squeeze(2), gate_mlp.squeeze(2),
             )
+        
+        use_seq_parallel = self.use_seq_parallel
+        if (not self.is_first_block) and use_seq_parallel:
+            full_x = _gather_input_sp(x, self.context_group)
+        else:
+            full_x = x
 
         # self-attention
-        input_x = modulate(self.self_attn_norm(x), shift_msa, scale_msa)
+        input_x = modulate(self.self_attn_norm(full_x), shift_msa, scale_msa)
         if self.use_linear_attn:
             chunk_size = 40768 
             if input_x.shape[1] > chunk_size:
+                cache = fla_Cahce.from_legacy_cache()
                 outputs = []
                 for start in range(0, input_x.shape[1], chunk_size):
                     x_chunk = input_x[:, start:start+chunk_size, :]
-                    if start == 0:
-                        past_key_values = None
+                    # if start == 0:
+                    #     past_key_values = None
 
-                    out_chunk, _, past_key_values = self.gated_delta(
+                    out_chunk, _, cache = self.gated_delta(
                         x_chunk,
-                        past_key_values=past_key_values,
+                        past_key_values=cache,
                         use_cache=True
                     )
                     outputs.append(out_chunk)
@@ -365,17 +670,45 @@ class DiTBlock(nn.Module):
                 attn_out, _, _ = self.gated_delta(input_x)
         else:
             attn_out = self.self_attn(input_x, f, freqs, L=L)
-        x = self.gate(x, gate_msa, attn_out)
+        full_x = self.gate(full_x, gate_msa, attn_out)
+
+        if use_seq_parallel:
+            distributed_x = _distribute_input_sp(full_x, self.context_group)
+        else:
+            distributed_x = full_x
+
+        if use_seq_parallel:
+            start_idx = self.context_group_rank * distributed_x.shape[1]
+            end_idx = (self.context_group_rank + 1) * distributed_x.shape[1]
 
         # cross-attention
-        input_x = self.cross_attn_norm(x)
-        attn_out = self.cross_attn(input_x, context, attn_mask=context_mask)
-        x = x + attn_out
+        distributed_input_x = self.cross_attn_norm(distributed_x)
 
-        input_x = modulate(self.ffn_norm(x), shift_mlp, scale_mlp)
-        ffn_out = self.ffn(input_x)
-        x = self.gate(x, gate_mlp, ffn_out)
-        return x
+        attn_out = self.cross_attn(distributed_input_x, context, attn_mask=context_mask)
+        distributed_x = distributed_x + attn_out
+
+        if len(t_mod.shape) == 4 and use_seq_parallel:
+            # t_mod: [1,6944 * N, 6,2560]
+            # distributed_x: [1,6944,2560]
+            # shift_mlp & shift_mlp: [1,6944 * N,2560]
+            distributed_input_x = modulate(self.ffn_norm(distributed_x), shift_mlp[:, start_idx:end_idx,:], scale_mlp[:, start_idx:end_idx,:])
+        else:
+            # t_mod: [1,6,2560]
+            # distributed_x: [1,6944,2560]
+            # shift_mlp & shift_mlp: [1, 1 ,2560]
+            distributed_input_x = modulate(self.ffn_norm(distributed_x), shift_mlp, scale_mlp)
+
+        distributed_ffn_out = self.ffn(distributed_input_x)
+        if len(t_mod.shape) == 4 and use_seq_parallel:
+            distributed_x = self.gate(distributed_x, gate_mlp[:, start_idx:end_idx,:], distributed_ffn_out)
+        else:
+            distributed_x = self.gate(distributed_x, gate_mlp, distributed_ffn_out)
+
+        if self.is_last_block and use_seq_parallel:
+            full_x = _gather_input_sp(distributed_x, self.context_group)
+            return full_x
+
+        return distributed_x
 
 
 class MLP(torch.nn.Module):
@@ -484,6 +817,9 @@ class KairosDiT(torch.nn.Module):
         fuse_vae_embedding_in_latents: bool = False,
         dilated_lengths = [1, 1, 6, 1],
         use_first_frame_cond: bool = False,
+        use_seq_parallel=False,
+        use_tp_in_getaeddeltanet=False,
+        use_tp_in_self_attn=False,
         attend_k0=False,
     ):
         super().__init__()
@@ -522,6 +858,8 @@ class KairosDiT(torch.nn.Module):
             nn.SiLU(), nn.Linear(dim, dim * 6)
         )
 
+        _blocks = []
+
         use_linear_attns = [(i + 1) % 4 == 0 for i in range(num_layers)]
         gateddeltanet_layer_indexs = [-1 for _ in range(num_layers)]
         gidx = 0
@@ -530,13 +868,22 @@ class KairosDiT(torch.nn.Module):
                 gateddeltanet_layer_indexs[i] = gidx
                 gidx += 1
 
-        self.blocks = nn.ModuleList([
-            DiTBlock(has_image_input, dim, num_heads, ffn_dim, eps, use_linear_attn=(i + 1) % 4 == 0, dilated_length=dilated_lengths[i % 4],
+        for i in range(num_layers):
+            _block = DiTBlock(has_image_input, dim, num_heads, ffn_dim, eps, use_linear_attn=(i + 1) % 4 == 0, dilated_length=dilated_lengths[i % 4],
+                    block_idx=i,
                     gateddeltanet_layer_idx=gateddeltanet_layer_indexs[i],
-                    attend_k0=attend_k0
+                    is_first_block=(i == 0),
+                    is_last_block= (i == (num_layers - 1)),
+                    use_seq_parallel=use_seq_parallel,
+                    use_tp_in_getaeddeltanet=use_tp_in_getaeddeltanet,
+                    use_tp_in_self_attn=use_tp_in_self_attn,
+                    attend_k0=attend_k0,
             )
-            for i in range(num_layers)
-        ])
+            _blocks.append(_block)
+        self.blocks = nn.ModuleList(_blocks)
+        print(f'{self.__class__.__name__} use_seq_parallel: {use_seq_parallel}')
+        print(f'{self.__class__.__name__} use_tp_in_getaeddeltanet: {use_tp_in_getaeddeltanet}')
+        print(f'{self.__class__.__name__} use_tp_in_self_attn: {use_tp_in_self_attn}')
         self.head = Head(dim, out_dim, patch_size, eps)
         head_dim = dim // num_heads
 
@@ -576,7 +923,7 @@ class KairosDiT(torch.nn.Module):
                 y: Optional[torch.Tensor] = None,
                 use_gradient_checkpointing: bool = False,
                 use_gradient_checkpointing_offload: bool = False,
-                first_frame_latent: Optional[torch.Tensor] = None,
+                first_frame_latents: Optional[torch.Tensor] = None,
                 **kwargs,
                 ):
 

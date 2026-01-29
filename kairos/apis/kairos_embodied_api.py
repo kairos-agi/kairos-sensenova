@@ -28,6 +28,8 @@ class KairosEmbodiedAPI(torch.nn.Module):
             vae_path=None,
             text_encoder_path=None,
             pipeline_args=None,
+            tea_cache_l1_thresh=None,
+            tea_cache_model_id="",
         )),
         torch_dtype=torch.bfloat16,
         device="cuda",
@@ -35,6 +37,9 @@ class KairosEmbodiedAPI(torch.nn.Module):
         super().__init__()
         
         self._init_config = config
+
+        self.tea_cache_l1_thresh = config.get('tea_cache_l1_thresh',None)
+        self.tea_cache_model_id = config.get('tea_cache_model_id',"")
 
         pretrained_dit = config.get('pretrained_dit',None)
         pipeline_type = config.get('pipeline_type','KairosEmbodiedPipeline')
@@ -75,5 +80,9 @@ class KairosEmbodiedAPI(torch.nn.Module):
         total_params = sum(p.numel() for p in self.pipe.parameters()) / 1e9
         print(f"Total parameters of the whole model: {total_params:.3f} B")
 
-    def __call__(self, **kwargs):    
+    def __call__(self, **kwargs):
+        # Provide TeaCache configuration here
+        kwargs["tea_cache_l1_thresh"] = self.tea_cache_l1_thresh
+        kwargs["tea_cache_model_id"] = self.tea_cache_model_id
+    
         return self.pipe(**kwargs)

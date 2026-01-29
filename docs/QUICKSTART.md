@@ -144,4 +144,59 @@ bash examples/inference.sh examples/example_ti2v.json
 bash examples/inference.sh examples/example_i2v.json
 ```
 
+## Run Generation using Multi-GPU (torchrun)
+> ⚠️ Currently only 4-GPU parallelism is supported. Other GPU counts / layouts will be added in future updates.
+
+> ⚙️ Additional Config for Multi-GPU Inference
+
+> When running with multi_gpu_inference.sh, you must enable tensor / sequence parallel related flags in the model config.
+
+> Edit kairos/configs/kairos_4b_config.py and set:
+```python
+pipeline = dict {
+    ...
+
+    # Enable for multi-GPU inference
+    "use_seq_parallel": True,
+    "use_tp_in_getaeddeltanet": True,
+    "use_tp_in_self_attn": True,
+}
+```
+> ⚠️ If these flags remain False, the pipeline may still run,
+but the model will not actually shard computation across GPUs,
+leading to only one GPU being heavily utilized.
+
+- example of t2v inference
+```bash
+bash examples/multi_gpu_inference.sh examples/example_t2v.json
+```
+
+- example of ti2v inference
+```bash
+bash examples/multi_gpu_inference.sh examples/example_ti2v.json
+```
+
+- example of i2v inference
+```bash
+bash examples/multi_gpu_inference.sh examples/example_i2v.json
+```
+## Enable TeaCache
+> ⚙️ TeaCache (Optional, works on both single-GPU and multi-GPU)
+
+> TeaCache can be enabled for both single-GPU and multi-GPU inference to reduce redundant DiT computation and improve throughput.
+
+> Edit kairos/configs/kairos_4b_config.py and uncomment:
+```python
+pipeline = dict(
+    ...
+
+    # Enable for TeaCache
+    tea_cache_l1_thresh = 0.1,
+    tea_cache_model_id = "Wan2.1-T2V-1.3B",
+)
+```
+>💡 Notes: If TeaCache is disabled, inference still works, but may be slower depending on the workload.
+
+>💡 Recommendation: We suggest starting from tea_cache_l1_thresh = 0.1 and then tuning it based on observed recomputation rate and output quality.
+
 > 💡 Tips: other inference instructions are similar. See the `use_prompt_rewriter`  in  `examples/inference.py` for details.

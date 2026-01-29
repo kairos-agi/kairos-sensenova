@@ -11,7 +11,7 @@ from typing import Optional
 from typing_extensions import Literal
 
 from .base_pipeline import BasePipeline, PipelineUnit, PipelineUnitRunner
-from kairos.modules.utils import load_state_dict, init_weights_on_device
+from kairos.modules.utils import load_state_dict, init_weights_on_device, parallel_state
 from kairos.modules.dits import sinusoidal_embedding_1d
 from kairos.modules.vaes import WanVideoVAE
 from kairos.modules.text_encoders import QwenVLTextEncoder
@@ -76,6 +76,10 @@ class KairosEmbodiedPipeline(BasePipeline):
         vae_path = None,
         text_encoder_path=None,
     ):
+        # ***********************************************************
+        # Initialize parallel state
+        parallel_state.init_parallel_state()
+
         # ***********************************************************
         # Initialize pipeline
         pipe = KairosEmbodiedPipeline(device=device, torch_dtype=torch_dtype)
@@ -946,6 +950,22 @@ class TemporalTiler_BCTHW:
         model_kwargs.update(tensor_dict)
         return value
 
+def ddp_or_bool(value: bool, device: torch.device) -> bool:
+    """
+    DDP-safe logical OR:
+    if any rank evaluates to True, all ranks will return True.
+    """
+    if not (torch.distributed.is_available() and torch.distributed.is_initialized()):
+        return value
+
+    t = torch.tensor(
+        int(value),
+        device=device,
+        dtype=torch.int32,
+    )
+    torch.distributed.all_reduce(t, op=torch.distributed.ReduceOp.MAX)
+    return bool(t.item())
+
 
 def model_fn_wan_video(
     dit,
@@ -1072,6 +1092,7 @@ def model_fn_wan_video(
     # TeaCache
     if tea_cache is not None:
         tea_cache_update = tea_cache.check(dit, x, t_mod)
+        tea_cache_update = ddp_or_bool(tea_cache_update, torch.device("cuda", torch.distributed.get_rank()))
     else:
         tea_cache_update = False
 
