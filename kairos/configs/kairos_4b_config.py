@@ -10,6 +10,8 @@ prompt_rewriter_path = f'{KAIROS_MODEL_DIR}/Qwen/Qwen3-VL-8B-Instruct/'
 pipeline = dict(
     type='KairosEmbodiedAPI',
     pretrained_dit = pretrained_dit,
+    # tea_cache_l1_thresh= 0.1,
+    # tea_cache_model_id= "Wan2.1-T2V-1.3B",
     pipeline_type='KairosEmbodiedPipeline',
     pipeline_args = dict(
         vae_path=vae_path,
@@ -33,6 +35,9 @@ pipeline = dict(
             "require_vae_embedding": False,
             "fuse_vae_embedding_in_latents": True,
             "dilated_lengths": [1, 1, 6, 1],
+            "use_seq_parallel": False,
+            "use_tp_in_getaeddeltanet": False,
+            "use_tp_in_self_attn": False,
         },
     ),
 )
