@@ -1,0 +1,15 @@
+{
+    "prompt": "A grand natural scene unfolds in an open landscape, beginning with a wide, distant view of a massive waterfall cascading down a towering cliff that dominates the frame, its immense scale emphasized by the surrounding rock formations and mist-filled air. From the cliff’s edge, enormous volumes of water surge downward in continuous streams, breaking into layered sheets and turbulent ribbons as gravity accelerates the flow, while countless fine droplets are torn from the main body of water and dispersed into the air, forming a drifting veil of mist that catches the sunlight and shimmers faintly. The waterfall’s surface exhibits complex motion, with faster central currents plunging straight down and thinner side streams clinging briefly to the rock face before peeling away, creating visible variations in speed, thickness, and texture. As the camera slowly advances forward and downward, the perspective tightens, bringing the lower section of the waterfall into clearer view, where the falling water collides violently with the surface below, generating bursts of white foam and outward-splashing sprays. The camera continues to move closer, transitioning into a medium and then near-field view of the plunge pool at the base of the waterfall, revealing a circular water basin whose surface churns constantly under the impact. Within the pool, swirling currents rotate in overlapping patterns, with darker, deeper green-blue water visible beneath the frothy white surface, and concentric ripples propagate outward toward the rocky edges. Individual droplets and splashes are now discernible, arcing briefly through the air before rejoining the pool, while fine mist rises continuously and drifts laterally with subtle air movement. Wet rock surfaces around the pool glisten under natural light, reflecting soft highlights that shift with the camera’s motion. Throughout the shot, the camera movement remains smooth and deliberate, steadily closing the distance from the monumental wide shot to an intimate, detailed view of the water’s surface, emphasizing the physical continuity of flowing water, gravity-driven motion, and the dynamic interaction between falling streams, airborne droplets, and the turbulent pool below.",
+    "input_image": "",
+    "negative_prompt" : "bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, deformed limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards, contorted human joints, objects floating against natural forces, abrupt shot changes",
+    "seed":0, 
+    "tiled":true,
+    "height":480,
+    "width": 640,
+    "num_frames":81,
+    "cfg_scale":5,
+    "use_prompt_rewriter": false,
+    "output_dir": "output/t2v" 
+}
+
+

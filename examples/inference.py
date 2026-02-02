@@ -79,6 +79,13 @@ if __name__ == '__main__':
             input_args_d['input_image'] = [image]
 
     input_args_d.pop('raw_prompt', '') 
+
+    # add prompt prefix in ti2v mode
+    if raw_prompt.strip() != '' and 'input_image' in input_args_d:
+        import pdb; pdb.set_trace()
+        prompt_prefix = 'high-quality video, realistic motion, single continuous shot, no jump cuts, smooth motion. '
+        input_args_d['prompt'] = prompt_prefix + input_args_d['prompt']
+
     video = pipeline(**input_args_d)
     print('infer done')
 
