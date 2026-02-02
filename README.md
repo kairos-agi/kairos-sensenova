@@ -119,31 +119,6 @@ Run Inference by following the instructions in
 
 We enhance the inference computational efficiency of the Kairos 3.0 model on various mainstream architecture chips(Ampere/Hopper/Blackwell) via a multi-faceted optimization approach, encompassing offloading optimization, quantization, scheduling policies, parallelization, and operator fusion strategies. To fulfill practical application scenarios, detailed optimization methodologies and performance evaluations are elaborated in the sections below.
 
-### Optimization Measures
-- **CPU OffLoad**: offload selected weights/activations to host memory to fit larger models on limited VRAM.
-- **W8A8 Quantization**: apply 8-bit weight/activation quantization to reduce memory footprint and improve throughput.
-- **TeaCache Scheduling**: reuse cached intermediate states across diffusion steps to cut redundant computation and improve stability.
-- **SP/TP Parallelism**: sequence/tensor parallel execution to scale throughput at higher batch sizes and longer sequences.
-- **Operator Fusion**: fuse common kernels to reduce launch overhead and improve utilization.
-
-### Performance Benchmarks
-The bar charts below illustrate relative latency improvements across optimization stages. Replace the placeholder values with your official measurements.
-
-**A100/A800: Optimization Process (Latency in seconds)**
-
-<div align="center">
-<img src="assets/acceleration_decomposition.png" width="93%"/>
-</div>
-
-
-**RTX 5090: Optimization Process (Latency in seconds)**
-
-
-<div align="center">
-<img src="assets/acceleration_decomposition.png" width="93%"/>
-</div>
-
-
 **Performance Benchmark of Kairos 3.0**
 
 *(Time (s) / Peak Memory (GB))*
@@ -152,10 +127,13 @@ The bar charts below illustrate relative latency improvements across optimizatio
 <table style="text-align: center; margin: 0 auto;">
     <thead>
         <tr>
+            <th rowspan="2" style="text-align: center;">Company</th>
             <th rowspan="2" style="text-align: center;">GPU</th>
             <th rowspan="2" style="text-align: center;">Model</th>
             <th rowspan="2" style="text-align: center;">Resolution</th>
-            <th colspan="3" style="text-align: center;">Number of GPUs</th>
+            <th rowspan="2" style="text-align: center;">Precision</th>
+            <th rowspan="2" style="text-align: center;">Memory(GB)</th>
+            <th colspan="3" style="text-align: center;">Number of GPUs(s)</th>
         </tr>
         <tr>
             <th style="text-align: center;">1</th>
@@ -165,17 +143,45 @@ The bar charts below illustrate relative latency improvements across optimizatio
     </thead>
     <tbody>
         <tr>
+            <td style="text-align: center;">Nvidia</td>
             <td style="text-align: center;">5090</td>
             <td style="text-align: center;">Kairos-4B TI2V</td>
             <td style="text-align: center;">720P</td>
-            <td style="text-align: center;">534.7/22.9</td>
-            <td style="text-align: center;">231.3/22.6</td>
-            <td style="text-align: center;">157.2/22.6</td>
+            <td style="text-align: center;">fp8</td>
+            <td style="text-align: center;">xx</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
         </tr>
         <tr>
-            <td style="text-align: center;">A100/A800</td>
+            <td style="text-align: center;">Nvidia</td>
+            <td style="text-align: center;">A800</td>
             <td style="text-align: center;">Kairos-4B TI2V</td>
             <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">bf16</td>
+            <td style="text-align: center;">xx</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+        </tr>
+        <tr>
+            <td style="text-align: center;">MetaX</td>
+            <td style="text-align: center;">C500</td>
+            <td style="text-align: center;">Kairos-4B TI2V</td>
+            <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">bf16</td>
+            <td style="text-align: center;">xx</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">...</td>
+        </tr>
+        <tr>
+            <td style="text-align: center;">Hygon</td>
+            <td style="text-align: center;">BW1000</td>
+            <td style="text-align: center;">Kairos-4B TI2V</td>
+            <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">bf16</td>
+            <td style="text-align: center;">xx</td>
             <td style="text-align: center;">...</td>
             <td style="text-align: center;">...</td>
             <td style="text-align: center;">...</td>
@@ -183,6 +189,26 @@ The bar charts below illustrate relative latency improvements across optimizatio
     </tbody>
 </table>
 </div>
+
+### Optimization Measures
+- **TeaCache Scheduling**: reuse cached intermediate states across diffusion steps to cut redundant computation and improve stability.
+- **SP/TP Parallelism**: sequence/tensor parallel execution to scale throughput at higher batch sizes and longer sequences.
+- **CPU OffLoad**: offload selected weights/activations to host memory to fit larger models on limited VRAM.
+- **W8A8 Quantization**: apply 8-bit weight/activation quantization to reduce memory footprint and improve throughput.
+- **Operator Fusion**: fuse common kernels to reduce launch overhead and improve utilization.
+
+### Performance Benchmarks
+The bar charts below illustrate relative latency improvements across optimization stages. Replace the placeholder values with your official measurements.
+
+**A100/A800: Optimization Process (Latency in seconds)**
+
+
+
+**RTX 5090: Optimization Process (Latency in seconds)**
+
+
+
+
 
 ## Citation
 If you find our work helpful, please cite us.
