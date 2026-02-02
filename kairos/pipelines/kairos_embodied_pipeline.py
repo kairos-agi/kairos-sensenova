@@ -207,6 +207,10 @@ class KairosEmbodiedPipeline(BasePipeline):
 
         dynamic_shift_len = ((latent_H + ph - 1) // ph) * ((latent_W + pw - 1) // pw)
 
+        num_inference_steps = int(
+            os.getenv("PIPELINE_STEPS", num_inference_steps)
+        )
+
         # 4) 传入 dynamic_shift_len
         self.scheduler.set_timesteps(
             num_inference_steps,
