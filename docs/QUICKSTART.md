@@ -144,6 +144,8 @@ bash examples/inference.sh examples/example_ti2v.json
 bash examples/inference.sh examples/example_i2v.json
 ```
 
+> 💡 Tips: The default video resolution is 704x1280. You can modify the resolution in the example.json. For example, if you want to generate a 480P video, use `examples/example_i2v_480P.json`, `examples/example_t2v_480P.json` and `examples/example_ti2v_480P.json`.
+
 ## Run Generation using Multi-GPU (torchrun)
 > ⚠️ Currently only 4-GPU parallelism is supported. Other GPU counts / layouts will be added in future updates.
 
