@@ -89,7 +89,9 @@ This hierarchical composition balances **local motion modeling**, **mid-range te
 | Models | Description |
 |--------------------| -------------|
 | <a href="https://huggingface.co/kairos-agi/kairos-sensenova-common">Kairos-sensenova-4B-pretrained-480p</a>     | 480p pretrained model with 16fps |
-| Kairos-sensenova-4B-posttrained     | posttrained model |
+| Kairos-sensenova-4B-pretrained-720p     | 720p pretrained model with 24fps |
+| Kairos-sensenova-4B-distillation-720p     | 720p distillation model |
+| Kairos-sensenova-4B-posttrained     | To be released |
 
 ## Run Kairos 3.0
 
@@ -144,21 +146,21 @@ We enhance the inference computational efficiency of the Kairos 3.0 model on var
     <tbody>
         <tr>
             <td style="text-align: center;">Nvidia</td>
-            <td style="text-align: center;">5090</td>
-            <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">720P</td>
-            <td style="text-align: center;">fp8</td>
-            <td style="text-align: center;">xx</td>
-            <td style="text-align: center;">...</td>
-            <td style="text-align: center;">...</td>
-            <td style="text-align: center;">...</td>
-        </tr>
-        <tr>
-            <td style="text-align: center;">Nvidia</td>
             <td style="text-align: center;">A800</td>
             <td style="text-align: center;">Kairos-4B TI2V</td>
             <td style="text-align: center;">720P</td>
             <td style="text-align: center;">bf16</td>
+            <td style="text-align: center;">53</td>
+            <td style="text-align: center;">257.3</td>
+            <td style="text-align: center;">128.5</td>
+            <td style="text-align: center;">...</td>
+        </tr>
+        <tr>
+            <td style="text-align: center;">Nvidia</td>
+            <td style="text-align: center;">5090</td>
+            <td style="text-align: center;">Kairos-4B TI2V</td>
+            <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">fp8</td>
             <td style="text-align: center;">xx</td>
             <td style="text-align: center;">...</td>
             <td style="text-align: center;">...</td>
