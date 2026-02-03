@@ -11,14 +11,16 @@ from typing import Optional
 from typing_extensions import Literal
 
 from .base_pipeline import BasePipeline, PipelineUnit, PipelineUnitRunner
-from kairos.modules.utils import load_state_dict, init_weights_on_device, parallel_state
+from kairos.modules.utils import load_state_dict, init_weights_on_device
 from kairos.modules.dits import sinusoidal_embedding_1d
 from kairos.modules.vaes import WanVideoVAE
 from kairos.modules.text_encoders import QwenVLTextEncoder
 from kairos.modules.schedulers.flow_match import FlowMatchScheduler
 
 from kairos.apis.builder import KAIROS_PROCESSOR
-
+import torch.distributed as dist
+from kairos.modules.utils import parallel_state
+from kairos.modules.vaes.parallel_vae_wrapper import ParallelVAEWrapper
 
 @KAIROS_PROCESSOR.register_module()
 class KairosEmbodiedPipeline(BasePipeline):
@@ -77,10 +79,6 @@ class KairosEmbodiedPipeline(BasePipeline):
         text_encoder_path=None,
     ):
         # ***********************************************************
-        # Initialize parallel state
-        parallel_state.init_parallel_state()
-
-        # ***********************************************************
         # Initialize pipeline
         pipe = KairosEmbodiedPipeline(device=device, torch_dtype=torch_dtype)
 
@@ -115,7 +113,12 @@ class KairosEmbodiedPipeline(BasePipeline):
         vae_.load_state_dict(state_dict_results, assign=True)
         vae_ = vae_.to(dtype=torch_dtype, device=device)
         pipe.vae = vae_
-
+        vae_group = parallel_state.get_vae_parallel_group()
+        vae_size = dist.get_world_size(vae_group) if (vae_group is not None and dist.is_initialized()) else 1
+        if vae_size > 1:
+            if not hasattr(pipe.vae, 'parallel_group'): 
+                print(f">>>> Wrapping VAE for Context Parallel Decoding with cp_size:{vae_size} <<<<")
+                pipe.vae = ParallelVAEWrapper(pipe.vae, vae_group)
         # Size division factor
         if pipe.vae is not None:
             pipe.height_division_factor = pipe.vae.upsampling_factor * 2
@@ -188,17 +191,17 @@ class KairosEmbodiedPipeline(BasePipeline):
         progress_bar_cmd=tqdm,
     ):
         # Scheduler
-        # 1) 计算 latent 时间尺寸
+        # 1) Compute latent temporal length.
         latent_T = (num_frames - 1) // self.time_division_factor + 1
         if vace_reference_image is not None:
             latent_T += 1
 
-        # 2) latent 空间尺寸（依赖 VAE 下采样）
+        # 2) Compute latent spatial resolution (depends on VAE down/up-sampling factor).
         u = getattr(self.vae, "upsampling_factor", 8)
         latent_H = height // u
         latent_W = width  // u
 
-        # 3) patch size（优先从 dit 里取，取不到默认 4）
+        # 3) Resolve DiT patch size (prefer model attribute; fall back to 4).
         ps = getattr(self.dit, "patch_size", 4)
         if isinstance(ps, (tuple, list)):
             ph, pw = ps[-2], ps[-1]
@@ -211,7 +214,7 @@ class KairosEmbodiedPipeline(BasePipeline):
             os.getenv("PIPELINE_STEPS", num_inference_steps)
         )
 
-        # 4) 传入 dynamic_shift_len
+        # 4) Configure scheduler timesteps with dynamic shift length and latent sequence length.
         self.scheduler.set_timesteps(
             num_inference_steps,
             denoising_strength=denoising_strength,
@@ -254,6 +257,17 @@ class KairosEmbodiedPipeline(BasePipeline):
             inputs_shared, inputs_posi, inputs_nega = self.unit_runner(unit, self, inputs_shared, inputs_posi, inputs_nega)
         inputs_shared["latents"].to(self.device)
 
+        cfg_parallel = (
+            cfg_scale != 1.0
+            and dist.is_initialized()
+            and hasattr(parallel_state, "cfg_group")
+            and parallel_state.cfg_group is not None
+            and dist.get_world_size(parallel_state.cfg_group) == 2
+            and (not cfg_merge)
+        )
+
+        inputs_shared["latents"].to(self.device)
+
         # Denoise
         self.load_models_to_device(self.in_iteration_models)
         models = {name: getattr(self, name) for name in self.in_iteration_models}
@@ -267,22 +281,55 @@ class KairosEmbodiedPipeline(BasePipeline):
             # Timestep
             timestep = timestep.unsqueeze(0).to(dtype=self.torch_dtype, device=self.device)
 
-            # Inference
-            noise_pred_posi = self.model_fn(**models, **inputs_shared, **inputs_posi, timestep=timestep)
-            if cfg_scale != 1.0:
-                if cfg_merge:
-                    noise_pred_posi, noise_pred_nega = noise_pred_posi.chunk(2, dim=0)
-                else:
-                    if 'first_frame_latents' in inputs_shared:
-                        first_frame_latents = inputs_shared.pop('first_frame_latents')
-                    else:
-                        first_frame_latents = None
-                    noise_pred_nega = self.model_fn(**models, **inputs_shared, **inputs_nega, timestep=timestep)
-                    if first_frame_latents is not None:
-                        inputs_shared['first_frame_latents'] = first_frame_latents
+            if cfg_parallel:
+                # CFG-parallel execution:
+                # - Each cfg_group contains exactly two ranks for the same tp_rank: (positive, negative).
+                # - parallel_state.cfg_rank encodes the role within cfg_group: 0 -> positive, 1 -> negative.
+                role = parallel_state.cfg_rank
+                in_kwargs = inputs_posi if role == 0 else inputs_nega
+
+                # Keep conditioning consistent across branches:
+                # Some codepaths should NOT apply first-frame conditioning for the negative branch.
+                first_frame_latents = None
+                if role == 1 and "first_frame_latents" in inputs_shared:
+                    first_frame_latents = inputs_shared.pop("first_frame_latents")
+
+                # Run the model on the local branch (positive or negative).
+                noise_pred_local = self.model_fn(
+                    **models,
+                    **inputs_shared,
+                    **in_kwargs,
+                    timestep=timestep,
+                )
+
+                if first_frame_latents is not None:
+                    inputs_shared["first_frame_latents"] = first_frame_latents
+
+                # Exchange local predictions within cfg_group to form the final CFG prediction.
+                # The cfg_group rank ordering is expected to be [positive, negative].
+                gathered = [torch.empty_like(noise_pred_local) for _ in range(2)]
+                dist.all_gather(gathered, noise_pred_local, group=parallel_state.cfg_group)
+
+                noise_pred_posi, noise_pred_nega = gathered[0], gathered[1]
                 noise_pred = noise_pred_nega + cfg_scale * (noise_pred_posi - noise_pred_nega)
+
             else:
-                noise_pred = noise_pred_posi
+                # Standard (non-CFG-parallel) execution.
+                noise_pred_posi = self.model_fn(**models, **inputs_shared, **inputs_posi, timestep=timestep)
+                if cfg_scale != 1.0:
+                    if cfg_merge:
+                        noise_pred_posi, noise_pred_nega = noise_pred_posi.chunk(2, dim=0)
+                    else:
+                        if 'first_frame_latents' in inputs_shared:
+                            first_frame_latents = inputs_shared.pop('first_frame_latents')
+                        else:
+                            first_frame_latents = None
+                        noise_pred_nega = self.model_fn(**models, **inputs_shared, **inputs_nega, timestep=timestep)
+                        if first_frame_latents is not None:
+                            inputs_shared['first_frame_latents'] = first_frame_latents
+                    noise_pred = noise_pred_nega + cfg_scale * (noise_pred_posi - noise_pred_nega)
+                else:
+                    noise_pred = noise_pred_posi
 
             # Scheduler
             inputs_shared["latents"] = self.scheduler.step(noise_pred, self.scheduler.timesteps[progress_id], inputs_shared["latents"])

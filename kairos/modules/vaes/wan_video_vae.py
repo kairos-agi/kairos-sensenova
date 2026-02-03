@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
+import torch.distributed as dist
 
 CACHE_T = 2
 
@@ -1099,6 +1100,55 @@ class WanVideoVAE(nn.Module):
         mask = rearrange(mask, "H W -> 1 1 1 H W")
         return mask
 
+
+    def decode_dist(self, zs, world_size, cur_rank, split_dim):
+        zs = zs.squeeze(0)
+        splited_total_len = zs.shape[split_dim]
+        splited_chunk_len = splited_total_len // world_size
+        padding_size = 1
+
+        if cur_rank == 0:
+            if split_dim == 2:
+                zs = zs[:, :, : splited_chunk_len + 2 * padding_size, :].contiguous()
+            elif split_dim == 3:
+                zs = zs[:, :, :, : splited_chunk_len + 2 * padding_size].contiguous()
+        elif cur_rank == world_size - 1:
+            if split_dim == 2:
+                zs = zs[:, :, -(splited_chunk_len + 2 * padding_size) :, :].contiguous()
+            elif split_dim == 3:
+                zs = zs[:, :, :, -(splited_chunk_len + 2 * padding_size) :].contiguous()
+        else:
+            if split_dim == 2:
+                zs = zs[:, :, cur_rank * splited_chunk_len - padding_size : (cur_rank + 1) * splited_chunk_len + padding_size, :].contiguous()
+            elif split_dim == 3:
+                zs = zs[:, :, :, cur_rank * splited_chunk_len - padding_size : (cur_rank + 1) * splited_chunk_len + padding_size].contiguous()
+
+        images = self.model.decode(zs.unsqueeze(0), self.scale).float().clamp_(-1, 1)
+
+        if cur_rank == 0:
+            if split_dim == 2:
+                images = images[:, :, :, : splited_chunk_len * 8, :].contiguous()
+            elif split_dim == 3:
+                images = images[:, :, :, :, : splited_chunk_len * 8].contiguous()
+        elif cur_rank == world_size - 1:
+            if split_dim == 2:
+                images = images[:, :, :, -splited_chunk_len * 8 :, :].contiguous()
+            elif split_dim == 3:
+                images = images[:, :, :, :, -splited_chunk_len * 8 :].contiguous()
+        else:
+            if split_dim == 2:
+                images = images[:, :, :, 8 * padding_size : -8 * padding_size, :].contiguous()
+            elif split_dim == 3:
+                images = images[:, :, :, :, 8 * padding_size : -8 * padding_size].contiguous()
+
+        full_images = [torch.empty_like(images) for _ in range(world_size)]
+        dist.all_gather(full_images, images)
+
+        torch.cuda.synchronize()
+
+        images = torch.cat(full_images, dim=split_dim + 1)
+
+        return images
 
     def tiled_decode(self, hidden_states, device, tile_size, tile_stride):
         _, _, T, H, W = hidden_states.shape
