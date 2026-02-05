@@ -226,3 +226,19 @@ pipeline = dict(
 >💡 Recommendation: We suggest starting from tea_cache_l1_thresh = 0.1 and then tuning it based on observed recomputation rate and output quality.
 
 > 💡 Tips: other inference instructions are similar. See the `use_prompt_rewriter`  in  `examples/inference.py` for details.
+
+## Enable vram_management
+> ⚙️ vram_management (Optional, works on both single-GPU and multi-GPU)
+
+> vram_management can be enabled for both single-GPU and multi-GPU inference to offload model between GPU and CPU under limited hardware resources.
+
+**How to enable**
+> Edit kairos/configs/kairos_4b_config.py and set:
+```python
+pipeline = dict(
+    ...
+
+    # Enable for vram_management
+    vram_management_enabled = True
+)
+```
