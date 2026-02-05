@@ -17,6 +17,7 @@ pipeline = dict(
         vae_path=vae_path,
         text_encoder_path=text_encoder_path,
         load_dit_fn='strict_load',
+        vram_management_enabled=False,
         dit_config = {
             "dit_type" : 'KairosDiT',
             "has_image_input": False,

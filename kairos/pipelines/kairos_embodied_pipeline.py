@@ -25,10 +25,11 @@ from kairos.modules.vaes.parallel_vae_wrapper import ParallelVAEWrapper
 @KAIROS_PROCESSOR.register_module()
 class KairosEmbodiedPipeline(BasePipeline):
 
-    def __init__(self, device="cuda", torch_dtype=torch.bfloat16):
+    def __init__(self, device="cuda", torch_dtype=torch.bfloat16, vram_management_enabled = False):
         super().__init__(
             device=device, torch_dtype=torch_dtype,
-            height_division_factor=16, width_division_factor=16, time_division_factor=4, time_division_remainder=1
+            height_division_factor=16, width_division_factor=16, time_division_factor=4, time_division_remainder=1,
+            vram_management_enabled = vram_management_enabled
         )
         self.scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True,
                                             exponential_shift=True, exponential_shift_mu=1.609)
@@ -77,10 +78,11 @@ class KairosEmbodiedPipeline(BasePipeline):
         dit = None,
         vae_path = None,
         text_encoder_path=None,
+        vram_management_enabled = False,
     ):
         # ***********************************************************
         # Initialize pipeline
-        pipe = KairosEmbodiedPipeline(device=device, torch_dtype=torch_dtype)
+        pipe = KairosEmbodiedPipeline(device=device, torch_dtype=torch_dtype, vram_management_enabled = vram_management_enabled)
 
         # ***********************************************************
         # load text_encoder
