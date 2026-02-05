@@ -243,6 +243,9 @@ class TPLinearFullWeight(nn.Module):
         self.tp_group = tp_group
         self.tp_rank = dist.get_rank(tp_group)
         self.tp_size = dist.get_world_size(tp_group)
+
+        src_global = dist.get_rank() - self.tp_rank
+
         assert out_dim % self.tp_size == 0
         self.shard = out_dim // self.tp_size
         
@@ -252,7 +255,7 @@ class TPLinearFullWeight(nn.Module):
         full_t = full.to(device=self.current_device) # 默认的 dtype=torch.float32
 
         # no need to broadcast if all rand seeds are aligned
-        dist.broadcast(full_t, src=0, group=self.tp_group)
+        dist.broadcast(full_t, src=src_global, group=self.tp_group)
         full = full_t.cpu()
         # only keep shard as parameter
         self.weight = nn.Parameter(full)
@@ -263,7 +266,7 @@ class TPLinearFullWeight(nn.Module):
         bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
         nn.init.uniform_(full_b, -bound, bound)
         full_b_t = full_b.to(device=self.current_device)
-        dist.broadcast(full_b_t, src=0, group=self.tp_group)
+        dist.broadcast(full_b_t, src=src_global, group=self.tp_group)
         full_b = full_b_t.cpu()
         self.bias = nn.Parameter(full_b)
 
@@ -565,7 +568,10 @@ class DiTBlock(nn.Module):
         self.use_tp_in_getaeddeltanet = use_tp_in_getaeddeltanet
         self.use_tp_in_self_attn = use_tp_in_self_attn
 
-        if self.use_seq_parallel or use_tp_in_getaeddeltanet or use_tp_in_self_attn:
+        dist_on = dist.is_available() and dist.is_initialized()
+        world = dist.get_world_size() if dist_on else 1
+
+        if world > 1 and (self.use_seq_parallel or use_tp_in_getaeddeltanet or use_tp_in_self_attn):
             self.context_group_rank = parallel_state.get_context_parallel_rank()
             self.context_group_size = parallel_state.get_context_parallel_world_size()
             self.context_group = parallel_state.get_context_parallel_group()

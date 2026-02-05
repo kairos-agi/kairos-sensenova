@@ -11,8 +11,11 @@ cd $CODE_DIR
 export PYTHONPATH=${CODE_DIR}:$PYTHONPATH
 
 # NOTE:
-# - This script currently supports **4-GPU** parallel inference only (nproc-per-node=4).
-# - Other GPU counts / parallel configurations (e.g., 6/8 GPUs, multi-node) will be added in future updates.
+# - This script supports **2-GPU** and **4-GPU** parallel inference only (nproc-per-node=2 or 4).
+# - When **CFG-parallel** is enabled (cond/uncond split), it runs as **two** parallel groups:
+#     - 2 groups × 2 GPUs (requires **4 GPUs** total), or
+#     - 2 groups × 4 GPUs (requires **8 GPUs** total).
+# - Other configurations (e.g., 6 GPUs, multi-node) are not supported yet.
 
 GPU=4
 torchrun --nnodes=1  --master_port 29556 --nproc-per-node=$GPU \

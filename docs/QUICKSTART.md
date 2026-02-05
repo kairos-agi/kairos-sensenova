@@ -147,27 +147,50 @@ bash examples/inference.sh examples/example_i2v.json
 > 💡 Tips: The default video resolution is 704x1280. You can modify the resolution in the example.json. For example, if you want to generate a 480P video, use `examples/example_i2v_480P.json`, `examples/example_t2v_480P.json` and `examples/example_ti2v_480P.json`.
 
 ## Run Generation using Multi-GPU (torchrun)
-> ⚠️ Currently only 4-GPU parallelism is supported. Other GPU counts / layouts will be added in future updates.
+> ⚠️ Multi-GPU supports two modes:
+> - **Pure-TP** (no CFG-parallel): `tp_size = WORLD_SIZE`, requires `num_heads % WORLD_SIZE == 0`.
+> - **CFG-parallel**: splits positive/negative branches across GPUs, currently supported **only for WORLD_SIZE = 4 or 8**.
 
 > ⚙️ Additional Config for Multi-GPU Inference
 
 > When running with multi_gpu_inference.sh, you must enable tensor / sequence parallel related flags in the model config.
 
+**How to enable**
 > Edit kairos/configs/kairos_4b_config.py and set:
 ```python
-pipeline = dict {
+pipeline = dict (
     ...
 
     # Enable for multi-GPU inference
     "use_seq_parallel": True,
     "use_tp_in_getaeddeltanet": True,
     "use_tp_in_self_attn": True,
-}
+)
 ```
 > ⚠️ If these flags remain False, the pipeline may still run,
 but the model will not actually shard computation across GPUs,
 leading to only one GPU being heavily utilized.
 
+### CFG-parallel (Optional, 4/8 GPUs)
+
+CFG guidance normally evaluates both **positive (cond)** and **negative (uncond)** branches.  
+With **CFG-parallel**, we run these two branches **on different GPUs in parallel**:
+
+- `cfg_size = 2` (positive / negative)
+- `tp_size = WORLD_SIZE // cfg_size`
+- Each `cfg_group` contains exactly two ranks for the same `tp_rank`: `[positive, negative]`
+
+**How to enable**
+1) Launch with 4 or 8 GPUs (torchrun).
+2) Enable CFG-parallel via input example_*.json:
+```json
+{
+    ...
+
+    "use_cfg": true
+}
+```
+>💡 Notes: `use_cfg` here enables **CFG-parallel** (distributed cond/uncond execution).  
 - example of t2v inference
 ```bash
 bash examples/multi_gpu_inference.sh examples/example_t2v.json
@@ -187,6 +210,7 @@ bash examples/multi_gpu_inference.sh examples/example_i2v.json
 
 > TeaCache can be enabled for both single-GPU and multi-GPU inference to reduce redundant DiT computation and improve throughput.
 
+**How to enable**
 > Edit kairos/configs/kairos_4b_config.py and uncomment:
 ```python
 pipeline = dict(
@@ -202,3 +226,19 @@ pipeline = dict(
 >💡 Recommendation: We suggest starting from tea_cache_l1_thresh = 0.1 and then tuning it based on observed recomputation rate and output quality.
 
 > 💡 Tips: other inference instructions are similar. See the `use_prompt_rewriter`  in  `examples/inference.py` for details.
+
+## Enable vram_management
+> ⚙️ vram_management (Optional, works on both single-GPU and multi-GPU)
+
+> vram_management can be enabled for both single-GPU and multi-GPU inference to offload model between GPU and CPU under limited hardware resources.
+
+**How to enable**
+> Edit kairos/configs/kairos_4b_config.py and set:
+```python
+pipeline = dict(
+    ...
+
+    # Enable for vram_management
+    vram_management_enabled = True
+)
+```

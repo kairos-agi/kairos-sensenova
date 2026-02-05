@@ -9,7 +9,8 @@
     "num_frames":81,
     "cfg_scale":5,
     "use_prompt_rewriter": false,
-    "output_dir": "output/i2v" 
+    "output_dir": "output/i2v",
+    "use_cfg": false
 }
 
 

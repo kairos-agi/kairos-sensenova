@@ -15,6 +15,7 @@ class BasePipeline(torch.nn.Module):
         device="cuda", torch_dtype=torch.float16,
         height_division_factor=64, width_division_factor=64,
         time_division_factor=None, time_division_remainder=None,
+        vram_management_enabled=False
     ):
         super().__init__()
         # The device and torch_dtype is used for the storage of intermediate variables, not models.
@@ -25,7 +26,7 @@ class BasePipeline(torch.nn.Module):
         self.width_division_factor = width_division_factor
         self.time_division_factor = time_division_factor
         self.time_division_remainder = time_division_remainder
-        self.vram_management_enabled = False
+        self.vram_management_enabled = vram_management_enabled
         
         
     def to(self, *args, **kwargs):
