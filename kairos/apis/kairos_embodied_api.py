@@ -40,6 +40,7 @@ class KairosEmbodiedAPI(torch.nn.Module):
 
         self.tea_cache_l1_thresh = config.get('tea_cache_l1_thresh',None)
         self.tea_cache_model_id = config.get('tea_cache_model_id',"")
+        self.parallel_mode = config.get('parallel_mode',None)
 
         pretrained_dit = config.get('pretrained_dit',None)
         pipeline_type = config.get('pipeline_type','KairosEmbodiedPipeline')
@@ -48,6 +49,7 @@ class KairosEmbodiedAPI(torch.nn.Module):
         if pipeline_args:
             dit_config = pipeline_args.pop('dit_config', None)
             load_dit_fn=pipeline_args.pop('load_dit_fn', None)
+            pipeline_args["parallel_mode"] = config.get('parallel_mode',None)
         else:
             dit_config = None
             load_dit_fn=None
@@ -84,5 +86,6 @@ class KairosEmbodiedAPI(torch.nn.Module):
         # Provide TeaCache configuration here
         kwargs["tea_cache_l1_thresh"] = self.tea_cache_l1_thresh
         kwargs["tea_cache_model_id"] = self.tea_cache_model_id
+        kwargs["parallel_mode"] = self.parallel_mode
     
         return self.pipe(**kwargs)

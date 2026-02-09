@@ -9,8 +9,7 @@
     "num_frames":81,
     "cfg_scale":5,
     "use_prompt_rewriter": false,
-    "output_dir": "output/ti2v",
-    "use_cfg": false
+    "output_dir": "output/ti2v"
 }
 
 

@@ -55,19 +55,19 @@ if __name__ == '__main__':
     # ***********************************************************
     # Initialize parallel state
     # ---- defaults: force no parallel unless multi-GPU + dist initialized ----
-    use_cfg = bool(input_args_d.pop("use_cfg", False))
+    use_cfg_parallel = cfg.pipeline.get("use_cfg_parallel")
     parallel_state.reset_cfg()
     is_multi_gpu_dist = (world_size > 1) and dist.is_initialized()
 
     # Enforce: no parallelism in non-multi-GPU environments
     if not is_multi_gpu_dist:
-        use_cfg = False  # treat cfg-parallel as OFF
+        use_cfg_parallel = False  # treat cfg-parallel as OFF
         if rank == 0:
             print(f"[init] dist=OFF or WORLD_SIZE=1 -> force parallel OFF ", flush=True)
     else:
         parallel_state.set_vae_group(dist.group.WORLD)
 
-        if use_cfg:
+        if use_cfg_parallel:
             cfg_size = 2  # fixed 2-way CFG (pos/neg)
             assert world_size in (4, 8), (
                 f"CFG-parallel only supports WORLD_SIZE in {{4, 8}}, got {world_size}. "
@@ -99,7 +99,7 @@ if __name__ == '__main__':
         parallel_state.set_tp_group(tp_group)
 
         # ---- CFG group (only when cfg-parallel enabled) ----
-        if use_cfg:
+        if use_cfg_parallel:
             # build all cfg groups in same order on all ranks
             cfg_groups = []
             for tp_r in range(tp_size):
