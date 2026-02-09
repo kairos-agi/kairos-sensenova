@@ -79,6 +79,7 @@ class KairosEmbodiedPipeline(BasePipeline):
         vae_path = None,
         text_encoder_path=None,
         vram_management_enabled = False,
+        parallel_mode = None,
     ):
         # ***********************************************************
         # Initialize pipeline
@@ -117,10 +118,10 @@ class KairosEmbodiedPipeline(BasePipeline):
         pipe.vae = vae_
         vae_group = parallel_state.get_vae_parallel_group()
         vae_size = dist.get_world_size(vae_group) if (vae_group is not None and dist.is_initialized()) else 1
-        if vae_size > 1:
-            if not hasattr(pipe.vae, 'parallel_group'): 
-                print(f">>>> Wrapping VAE for Context Parallel Decoding with cp_size:{vae_size} <<<<")
-                pipe.vae = ParallelVAEWrapper(pipe.vae, vae_group)
+        if vae_size > 1 and parallel_mode:
+            if (parallel_mode == "cp" or parallel_mode == "sp") and not hasattr(pipe.vae, 'parallel_group'): 
+                print(f">>>> Wrapping VAE for Context Parallel Decoding with cp_size:{vae_size}, parallel mode: {parallel_mode} <<<<")
+                pipe.vae = ParallelVAEWrapper(pipe.vae, vae_group, parallel_mode)
         # Size division factor
         if pipe.vae is not None:
             pipe.height_division_factor = pipe.vae.upsampling_factor * 2
@@ -191,6 +192,7 @@ class KairosEmbodiedPipeline(BasePipeline):
         tea_cache_model_id: Optional[str] = "",
         # progress_bar
         progress_bar_cmd=tqdm,
+        parallel_mode: Optional[str] = None,
     ):
         # Scheduler
         # 1) Compute latent temporal length.
@@ -262,9 +264,8 @@ class KairosEmbodiedPipeline(BasePipeline):
         cfg_parallel = (
             cfg_scale != 1.0
             and dist.is_initialized()
-            and hasattr(parallel_state, "cfg_group")
-            and parallel_state.cfg_group is not None
-            and dist.get_world_size(parallel_state.cfg_group) == 2
+            and parallel_state.get_cfg_parallel_group() is not None
+            and parallel_state.get_cfg_parallel_world_size() == 2
             and (not cfg_merge)
         )
 
@@ -287,7 +288,7 @@ class KairosEmbodiedPipeline(BasePipeline):
                 # CFG-parallel execution:
                 # - Each cfg_group contains exactly two ranks for the same tp_rank: (positive, negative).
                 # - parallel_state.cfg_rank encodes the role within cfg_group: 0 -> positive, 1 -> negative.
-                role = parallel_state.cfg_rank
+                role = parallel_state.get_cfg_parallel_rank()
                 in_kwargs = inputs_posi if role == 0 else inputs_nega
 
                 # Keep conditioning consistent across branches:
@@ -310,7 +311,7 @@ class KairosEmbodiedPipeline(BasePipeline):
                 # Exchange local predictions within cfg_group to form the final CFG prediction.
                 # The cfg_group rank ordering is expected to be [positive, negative].
                 gathered = [torch.empty_like(noise_pred_local) for _ in range(2)]
-                dist.all_gather(gathered, noise_pred_local, group=parallel_state.cfg_group)
+                dist.all_gather(gathered, noise_pred_local, group=parallel_state.get_cfg_parallel_group())
 
                 noise_pred_posi, noise_pred_nega = gathered[0], gathered[1]
                 noise_pred = noise_pred_nega + cfg_scale * (noise_pred_posi - noise_pred_nega)

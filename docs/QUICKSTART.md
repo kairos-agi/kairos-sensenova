@@ -183,14 +183,15 @@ With **CFG-parallel**, we run these two branches **on different GPUs in parallel
 **How to enable**
 1) Launch with 4 or 8 GPUs (torchrun).
 2) Enable CFG-parallel via input example_*.json:
-```json
-{
+```python
+pipeline = dict(
     ...
 
-    "use_cfg": true
-}
+    # Enable for cfg parallel
+    use_cfg_parallel=True
+)
 ```
->💡 Notes: `use_cfg` here enables **CFG-parallel** (distributed cond/uncond execution).  
+>💡 Notes: `use_cfg_parallel` here enables **CFG-parallel** (distributed cond/uncond execution).  
 - example of t2v inference
 ```bash
 bash examples/multi_gpu_inference.sh examples/example_t2v.json
