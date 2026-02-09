@@ -160,9 +160,9 @@ We enhance the inference computational efficiency of the Kairos 3.0 model on var
             <td style="text-align: center;">5090</td>
             <td style="text-align: center;">Kairos-4B TI2V</td>
             <td style="text-align: center;">720P</td>
-            <td style="text-align: center;">fp8</td>
-            <td style="text-align: center;">xx</td>
-            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">bf16</td>
+            <td style="text-align: center;">31.2</td>
+            <td style="text-align: center;">271.6</td>
             <td style="text-align: center;">...</td>
             <td style="text-align: center;">...</td>
         </tr>
