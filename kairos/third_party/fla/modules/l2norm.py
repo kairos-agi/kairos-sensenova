@@ -8,7 +8,12 @@ import triton.language as tl
 
 from kairos.third_party.fla.utils import autotune_cache_kwargs, input_guard, is_amd
 
-BT_LIST = [8, 16, 32, 64, 128]
+import os
+IS_METAX = os.environ.get("IS_METAX", "0") == "1"
+if IS_METAX:
+    BT_LIST = [8, 16, 32, 64] 
+else:
+    BT_LIST = [8, 16, 32, 64, 128]
 NUM_WARPS_AUTOTUNE = [1, 2, 4, 8, 16] if is_amd else [1, 2, 4, 8, 16, 32]
 
 

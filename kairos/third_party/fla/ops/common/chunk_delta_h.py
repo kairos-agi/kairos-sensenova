@@ -11,6 +11,16 @@ from kairos.third_party.fla.utils import autotune_cache_kwargs, check_shared_mem
 
 NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8, 16]
 
+import os
+IS_METAX = os.environ.get("IS_METAX", "0") == "1"
+if IS_METAX:
+    num_stages_range = [1]
+    num_warps_range = [4]
+    BV_range = [16]
+else:
+    num_stages_range = [2, 3, 4]
+    num_warps_range = [2, 4]
+    BV_range = [32, 64]
 
 @triton.heuristics({
     'USE_G': lambda args: args['g'] is not None,
@@ -23,9 +33,9 @@ NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8, 16]
 @triton.autotune(
     configs=[
         triton.Config({'BV': BV}, num_warps=num_warps, num_stages=num_stages)
-        for num_warps in [2, 4]
-        for num_stages in [2, 3, 4]
-        for BV in [32, 64]
+        for num_warps in num_warps_range
+        for num_stages in num_stages_range
+        for BV in BV_range
     ],
     key=['H', 'K', 'V', 'BT'],
     use_cuda_graph=use_cuda_graph,
