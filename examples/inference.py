@@ -13,6 +13,39 @@ import torch
 from PIL import Image
 from kairos.modules.utils import save_video, save_image, parallel_state
 
+# default 0（general devices）
+IS_METAX = os.environ.get("IS_METAX", "0") == "1"
+
+if IS_METAX:
+    print("metax devices")
+    if not hasattr(torch, "maca"):
+        torch.maca = torch.cuda
+
+    if hasattr(torch, "get_autocast_dtype"):
+        _orig_get_autocast_dtype = torch.get_autocast_dtype
+
+        def _patched_get_autocast_dtype(device_type: str):
+            # fla / triton ~G~L~B~^~\| ~F 'maca'~L~_~@~S~H~P 'cuda'
+            if device_type == "maca":
+                device_type = "cuda"
+            return _orig_get_autocast_dtype(device_type)
+
+        torch.get_autocast_dtype = _patched_get_autocast_dtype
+
+    if hasattr(torch, "is_autocast_enabled"):
+        _orig_is_autocast_enabled = torch.is_autocast_enabled
+
+        def _patched_is_autocast_enabled(device_type: str = "cuda"):
+            if device_type == "maca":
+                device_type = "cuda"
+            return _orig_is_autocast_enabled(device_type)
+
+        torch.is_autocast_enabled = _patched_is_autocast_enabled
+else:
+    print("general devices")
+
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='TRAIN_MODEL_LOOP')
     parser.add_argument('--input_file', default='', help='input_file')
