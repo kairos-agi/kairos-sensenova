@@ -9,7 +9,7 @@ CODE_DIR="$(cd "${CURR_FILE_DIR}/.." && pwd)"
 cd $CODE_DIR
 
 export PYTHONPATH=${CODE_DIR}:$PYTHONPATH
-
+python ${CODE_DIR}/kairos/third_party/manage_libs.py
 
 torchrun --nnodes=1  --master_port 29556 --nproc-per-node=1 \
     ${CODE_DIR}/examples/inference.py \
