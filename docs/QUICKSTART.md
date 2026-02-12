@@ -51,15 +51,15 @@ snapshot_download(
 
 ### Text encoder model (ModelScope)
 
-- Model ID: **[Qwen/Qwen2.5-VL-7B-Instruct](https://modelscope.cn/models/Qwen/Qwen2.5-VL-7B-Instruct)** from ModelScope
-- Target directory: `models/Qwen/Qwen2.5-VL-7B-Instruct/`
+- Model ID: **[Qwen/Qwen2.5-VL-7B-Instruct-AWQ](https://modelscope.cn/models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ)** from ModelScope
+- Target directory: `models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/`
 #### Python:
 ```python
 from modelscope import snapshot_download
 
 snapshot_download(
-    "Qwen/Qwen2.5-VL-7B-Instruct",
-    local_dir="models/Qwen/Qwen2.5-VL-7B-Instruct",
+    "Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
+    local_dir="models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ",
 )
 ```
 ### Prompt Rewriter model (ModelScope)

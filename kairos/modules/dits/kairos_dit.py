@@ -6,6 +6,11 @@ from typing import Tuple, Optional
 from einops import rearrange
 from transformers.activations import ACT2CLS
 from apex.normalization.fused_layer_norm import FusedRMSNorm
+
+FLASH_ATTN_2_AVAILABLE = False
+FLASH_ATTN_3_AVAILABLE = False
+SAGE_ATTN_AVAILABLE = False
+
 try:
     import flash_attn_interface
     # FLASH_ATTN_3_AVAILABLE = True
@@ -20,11 +25,22 @@ try:
 except ModuleNotFoundError:
     FLASH_ATTN_2_AVAILABLE = False
 
-try:
-    from sageattention import sageattn
-    SAGE_ATTN_AVAILABLE = True
-except ModuleNotFoundError:
-    SAGE_ATTN_AVAILABLE = False
+IS_CUDA = torch.cuda.is_available()
+if not IS_CUDA:
+    os.environ["TORCHDYNAMO_DISABLE"] = "1"
+
+def get_cuda_sm():
+    if not IS_CUDA:
+        return None
+    major, minor = torch.cuda.get_device_capability()
+    return major * 10 + minor 
+CUDA_SM = get_cuda_sm()
+if CUDA_SM == 80:
+    try:
+        from sageattention import sag_attention_with_window
+        SAGE_ATTN_AVAILABLE = True
+    except ModuleNotFoundError:
+        SAGE_ATTN_AVAILABLE = False
 
 try:
     from fla.layers import GatedDeltaNet
@@ -33,10 +49,11 @@ except ModuleNotFoundError:
 
 from kairos.apis.builder import DITS
 from torch.distributed import ProcessGroup, get_process_group_ranks
-from kairos.modules.dits.fla_local.layers.gated_deltanet_with_tp import GatedDeltaNet as GatedDeltaNetWithTP
-from kairos.modules.dits.fla_local.models.utils import Cache as fla_Cahce
+from kairos.third_party.fla.layers.gated_deltanet_with_tp import GatedDeltaNet as GatedDeltaNetWithTP
+from kairos.third_party.fla.models.utils import Cache as fla_Cahce
 import torch.distributed as dist
 from kairos.modules.utils import parallel_state
+from kairos.modules.utils.linear import ColumnParallelLinear,RowParallelLinear
 
 def flash_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, num_heads: int, 
                     compatibility_mode=False, attn_mask=None, window_size=(-1, -1), return_attn_probs=False):
@@ -153,10 +170,26 @@ class AttentionModule(nn.Module):
         x = flash_attention(q=q, k=k, v=v, num_heads=self.num_heads, attn_mask=attn_mask, window_size=window_size)
         x = rearrange(x, "b s n d -> b s (n d)", n=self.num_heads)
         return x
+class SagAttentionModule(nn.Module):
+    def __init__(self, num_heads):
+        super().__init__()
+        self.num_heads = num_heads
+        
+    def forward(self, q, k, v, attn_mask=None, window_size=(-1, -1)):
+        b, s, _ = q.shape
+        n = self.num_heads
+        d = q.shape[-1] // n
 
+        # 一步到位：b s (n d) -> b n s d
+        q = q.view(b, s, n, d).transpose(1, 2)
+        k = k.view(b, s, n, d).transpose(1, 2)
+        v = v.view(b, s, n, d).transpose(1, 2)
+        x = sag_attention_with_window(q, k, v,window_size=window_size,qk_quant_gran="per_warp", pv_accum_dtype="fp16",smooth_v=True)
+        x = x.transpose(1, 2).contiguous().view(b, s, n * d)
+        return x
 
 class SelfAttention(nn.Module):
-    def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3, attend_k0=False):
+    def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3, attend_k0=False, backend = "flashattention"):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -164,6 +197,7 @@ class SelfAttention(nn.Module):
         self.dilated_length = dilated_length
         self.window_size = window_size
         self.attend_k0 = attend_k0
+        self.backend = backend
 
         self.q = nn.Linear(dim, dim)
         self.k = nn.Linear(dim, dim)
@@ -171,9 +205,12 @@ class SelfAttention(nn.Module):
         self.o = nn.Linear(dim, dim)
         self.norm_q = FusedRMSNorm(dim, eps=eps)
         self.norm_k = FusedRMSNorm(dim, eps=eps)
-        
-        self.attn = AttentionModule(self.num_heads)
-    
+
+        if SAGE_ATTN_AVAILABLE:
+            self.attn = SagAttentionModule(self.num_heads)
+        else:
+            self.attn = AttentionModule(self.num_heads)
+ 
     def extra_repr(self):
         return f'dilated_length={self.dilated_length}, window_size={self.window_size}'
     
@@ -234,95 +271,17 @@ class SelfAttention(nn.Module):
                 out = out[:, :-pad_len]
         return out
 
-class TPLinearFullWeight(nn.Module):
-    def __init__(self, in_dim, out_dim, tp_group = None):
-        super().__init__()
-
-        self.current_device = torch.cuda.current_device()
-
-        self.tp_group = tp_group
-        self.tp_rank = dist.get_rank(tp_group)
-        self.tp_size = dist.get_world_size(tp_group)
-
-        src_global = dist.get_rank() - self.tp_rank
-
-        assert out_dim % self.tp_size == 0
-        self.shard = out_dim // self.tp_size
-        
-        full = torch.empty(out_dim, in_dim, device=None, dtype=None)
-        nn.init.kaiming_uniform_(full, a=math.sqrt(5))
-
-        full_t = full.to(device=self.current_device) # 默认的 dtype=torch.float32
-
-        # no need to broadcast if all rand seeds are aligned
-        dist.broadcast(full_t, src=src_global, group=self.tp_group)
-        full = full_t.cpu()
-        # only keep shard as parameter
-        self.weight = nn.Parameter(full)
-
-        # --- Bias 初始化 ---
-        full_b = torch.empty(out_dim)
-        fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
-        bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-        nn.init.uniform_(full_b, -bound, bound)
-        full_b_t = full_b.to(device=self.current_device)
-        dist.broadcast(full_b_t, src=src_global, group=self.tp_group)
-        full_b = full_b_t.cpu()
-        self.bias = nn.Parameter(full_b)
-
-        def backward_hook(grad):
-            if grad is None:
-                return None
-            dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tp_group)
-            
-            # grad_fp32 = grad.to(torch.float32)
-            # dist.all_reduce(grad_fp32, op=dist.ReduceOp.SUM, group=self.tp_group)
-            # grad = grad_fp32.to(grad.dtype)
-            return grad
-        
-        self.weight.register_hook(backward_hook)
-        self.bias.register_hook(backward_hook)
-
-    def forward(self, x):
-        start = self.tp_rank * self.shard
-        end = start + self.shard
-
-        w_shard = self.weight[start:end]
-        b_shard = self.bias[start:end]
-        
-        # return F.linear(x, w_shard, b_shard)
-        return _ColumnParallelElement.apply(x, w_shard, b_shard, self.tp_group)
-    
-class _ColumnParallelElement(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, input, weight, bias, tp_group):
-        ctx.save_for_backward(input, weight)
-        ctx.tp_group = tp_group
-        ctx.use_bias = bias is not None
-
-        output = F.linear(input, weight, bias)
-
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        input, weight = ctx.saved_tensors
-        tp_group = ctx.tp_group
-        
-        grad_output_2d = grad_output.reshape(-1, grad_output.shape[-1])
-        input_2d = input.reshape(-1, input.shape[-1])
-
-        grad_weight = grad_output_2d.t().matmul(input_2d)
-
-        grad_bias = None
-        if ctx.use_bias and ctx.needs_input_grad[2]:
-            grad_bias = grad_output_2d.sum(dim=0)
-
-        grad_input = grad_output.matmul(weight)
-
-        dist.all_reduce(grad_input, op=dist.ReduceOp.SUM, group=tp_group)
-
-        return grad_input, grad_weight, grad_bias, None
+def tensor_parallel_rms_norm(x: torch.Tensor, norm: "RMSNorm") -> torch.Tensor:
+    tp_rank = parallel_state.get_context_parallel_rank()
+    tp_size = parallel_state.get_context_parallel_world_size()
+    tp_group = parallel_state.get_context_parallel_group()
+    src_dtype = x.dtype
+    weight = norm.weight.tensor_split(tp_size)[tp_rank].float()
+    x_fp32 = x.float()
+    variance = x_fp32.pow(2).mean(dim=-1, keepdim=True)
+    dist.all_reduce(variance, op=dist.ReduceOp.AVG, group=tp_group)
+    output = x_fp32 * torch.rsqrt(variance + norm.eps) * weight
+    return output.to(dtype=src_dtype)
 
 class SelfAttentionTP(nn.Module):
     def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3):
@@ -341,16 +300,19 @@ class SelfAttentionTP(nn.Module):
         self.dilated_length = dilated_length
         self.window_size = window_size
 
-        self.q = TPLinearFullWeight(dim, dim, tp_group=self.tp_group)
-        self.k = TPLinearFullWeight(dim, dim, tp_group=self.tp_group)
-        self.v = TPLinearFullWeight(dim, dim, tp_group=self.tp_group)
+        self.q = ColumnParallelLinear(dim, dim, gather_output=False)
+        self.k = ColumnParallelLinear(dim, dim, gather_output=False)
+        self.v = ColumnParallelLinear(dim, dim, gather_output=False)
     
-        self.o = nn.Linear(dim, dim)
+        self.o = RowParallelLinear(dim, dim)
 
         self.norm_q = FusedRMSNorm(dim, eps=eps)
         self.norm_k = FusedRMSNorm(dim, eps=eps)
 
-        self.attn = AttentionModule(self.num_heads_local)
+        if SAGE_ATTN_AVAILABLE:
+            self.attn = SagAttentionModule(self.num_heads_local)
+        else:
+            self.attn = AttentionModule(self.num_heads_local)
 
     def extra_repr(self):
         return f'dilated_length={self.dilated_length}, window_size={self.window_size}, tp_size={self.tp_size}'
@@ -361,16 +323,8 @@ class SelfAttentionTP(nn.Module):
         l_q = self.q(x)
         l_k = self.k(x)
 
-        # split_x -> full_x
-        l_q = _gather_input_tp(l_q, self.tp_group)
-        l_k = _gather_input_tp(l_k, self.tp_group)
-        
-        q = self.norm_q(l_q)
-        k = self.norm_k(l_k)
-
-        # full_x -> split_x
-        q = _distribute_input_tp(q, self.tp_group)
-        k = _distribute_input_tp(k, self.tp_group)
+        q= tensor_parallel_rms_norm(l_q, self.norm_q)
+        k= tensor_parallel_rms_norm(l_k, self.norm_k)
 
         v = self.v(x)
     
@@ -392,9 +346,6 @@ class SelfAttentionTP(nn.Module):
             v = rearrange(v, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
 
         x = self.attn(q, k, v, window_size=(L*self.window_size, L*self.window_size))
-        
-        # split_x -> full_x
-        x = _gather_input_tp(x, self.tp_group)
 
         out = self.o(x)
     
@@ -471,60 +422,16 @@ def _distribute_input_sp(x, context_group):
     return local_x
 
 def _gather_input_sp(x, context_group):
-    context_group_world_size = dist.get_world_size(group=context_group)
-    context_group_rank = dist.get_rank(group=context_group)
-    if context_group_world_size <= 1:
+    if not dist.is_available() or not dist.is_initialized():
+        return x
+
+    world = dist.get_world_size(group=context_group)
+    if world <= 1:
         return x
     
-    B, N_local, D = x.shape
-    start_idx = context_group_rank * N_local
-    end_idx = start_idx + N_local
-
-    full_output = torch.zeros(B, N_local * context_group_world_size, D, 
-                                device=x.device,
-                                dtype=x.dtype)
-    full_output[:, start_idx:end_idx, :] = x
-    dist.all_reduce(full_output, op=dist.ReduceOp.SUM, group=context_group)
-
-    return full_output
-
-def _distribute_input_tp(x, context_group):
-    """将输入分发到多个GPU"""
-
-    context_group_world_size = dist.get_world_size(group=context_group)
-    context_group_rank = dist.get_rank(group=context_group)
-    if context_group_world_size <= 1:
-        return x
-        
-    B, N, D = x.shape
-    
-    assert D % context_group_world_size == 0, 'cannot split tensor {} vs {}'.format(x.shape, context_group_world_size)
-
-    local_dim = D // context_group_world_size
-    start_idx = context_group_rank * local_dim
-    end_idx = start_idx + local_dim if context_group_rank != context_group_world_size - 1 else D
-    
-    local_x = x[:, :, start_idx:end_idx].contiguous()
-    
-    return local_x
-
-def _gather_input_tp(x, context_group):
-    context_group_world_size = dist.get_world_size(group=context_group)
-    context_group_rank = dist.get_rank(group=context_group)
-    if context_group_world_size <= 1:
-        return x
-    
-    B, N, D_local = x.shape
-    start_idx = context_group_rank * D_local
-    end_idx = start_idx + D_local
-
-    full_output = torch.zeros(B, N , D_local * context_group_world_size,
-                                device=x.device,
-                                dtype=x.dtype)
-    full_output[:, :, start_idx:end_idx] = x
-    dist.all_reduce(full_output, op=dist.ReduceOp.SUM, group=context_group)
-
-    return full_output
+    gather_list = [torch.empty_like(x) for _ in range(world)]
+    dist.all_gather(gather_list, x, group=context_group)
+    return torch.cat(gather_list, dim=1)
 
 class GateModule(nn.Module):
     def __init__(self,):
@@ -553,7 +460,7 @@ class DiTBlock(nn.Module):
         use_seq_parallel=False,
         use_tp_in_getaeddeltanet=False,
         use_tp_in_self_attn=False,
-        attend_k0=False,
+        attend_k0=False
         ):
         super().__init__()
         self.dim = dim
@@ -630,6 +537,7 @@ class DiTBlock(nn.Module):
         self.modulation = nn.Parameter(torch.randn(1, 6, dim) / dim**0.5)
         self.gate = GateModule()
 
+    @torch.compile(fullgraph=False, mode="max-autotune-no-cudagraphs")
     def forward(self, x, context, t_mod, freqs, grid_size, context_mask=None):
         (f, h, w) = grid_size
         B, _, D = x.shape
@@ -826,7 +734,7 @@ class KairosDiT(torch.nn.Module):
         use_seq_parallel=False,
         use_tp_in_getaeddeltanet=False,
         use_tp_in_self_attn=False,
-        attend_k0=False,
+        attend_k0=False
     ):
         super().__init__()
         self.dim = dim
@@ -883,7 +791,7 @@ class KairosDiT(torch.nn.Module):
                     use_seq_parallel=use_seq_parallel,
                     use_tp_in_getaeddeltanet=use_tp_in_getaeddeltanet,
                     use_tp_in_self_attn=use_tp_in_self_attn,
-                    attend_k0=attend_k0,
+                    attend_k0=attend_k0
             )
             _blocks.append(_block)
         self.blocks = nn.ModuleList(_blocks)

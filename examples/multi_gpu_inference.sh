@@ -9,6 +9,7 @@ CODE_DIR="$(cd "${CURR_FILE_DIR}/.." && pwd)"
 cd $CODE_DIR
 
 export PYTHONPATH=${CODE_DIR}:$PYTHONPATH
+python ${CODE_DIR}/kairos/third_party/manage_libs.py
 
 # NOTE:
 # - This script supports **2-GPU** and **4-GPU** parallel inference only (nproc-per-node=2 or 4).
