@@ -1,8 +1,8 @@
 import os
 import torch
+import subprocess
 
-
-def detect_gpu_vendor():
+def detectplat_device_gpu_vendor():
     try:
         result = subprocess.run(
             ["mx-smi"],
@@ -13,7 +13,7 @@ def detect_gpu_vendor():
         )
         output = result.stdout + result.stderr
 
-        if "MetaX" in output or "C500" in output:
+        if "MetaX" in output:
             return "MetaX"
     except:
         pass
@@ -33,13 +33,27 @@ def detect_gpu_vendor():
 
     return "Unknown"
 
-plat_device = detectplat_device_gpu_vendor()
-IS_METAX = False
-print(f'current device: {plat_device}')
 
-if plat_device == "MetaX":
-    os.environ["IS_METAX"] = "1"
-    IS_METAX = True
+def get_cuda_sm():
+    IS_CUDA = torch.cuda.is_available()
+    if not IS_CUDA:
+        return None
+    major, minor = torch.cuda.get_device_capability()
+    return major * 10 + minor 
+
+
+FLAGS_KAIROS_PLAT_DEVICE = detectplat_device_gpu_vendor()
+FLAGS_KAIROS_IS_METAX = False
+FLAGS_KAIROS_CUDA_SM = None
+print(f'current device: {FLAGS_KAIROS_PLAT_DEVICE}')
+
+if FLAGS_KAIROS_PLAT_DEVICE == "NVIDIA":
+    FLAGS_KAIROS_CUDA_SM = get_cuda_sm()
+
+if FLAGS_KAIROS_PLAT_DEVICE == "MetaX":
+    os.environ["IS_METAX"] = "1" # for docker 
+    os.environ["FLAGS_KAIROS_IS_METAX"] = "1"
+    FLAGS_KAIROS_IS_METAX = True
     if not hasattr(torch, "maca"):
         torch.maca = torch.cuda
 

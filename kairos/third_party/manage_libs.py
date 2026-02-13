@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 import os
 
+from kairos.modules.utils import FLAGS_KAIROS_IS_METAX, FLAGS_KAIROS_CUDA_SM
+
 # ---------- Configuration ----------
 # Each library's source directory (relative to this script)
 LIBS = [
@@ -49,24 +51,9 @@ def ensure_torch():
         print("PyTorch is not installed. Installing torch...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "torch"])
 
-def is_cuda_sm80() -> bool:
-    """Check if current platform is CUDA and SM=80"""
-    try:
-        import torch
-        if not torch.cuda.is_available():
-            return False
-        for i in range(torch.cuda.device_count()):
-            cap = torch.cuda.get_device_capability(i)
-            if cap == (8, 0):
-                return True
-        return False
-    except ImportError:
-        sm = os.environ.get("CUDA_SM", "")
-        return sm == "80"
-
 # ---------- Main Logic ----------
 def main():
-    if not is_cuda_sm80():
+    if FLAGS_KAIROS_CUDA_SM != 80:
         print("Current platform is not CUDA or not SM=80, skipping installation.")
         return
 

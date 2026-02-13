@@ -12,9 +12,9 @@ from kairos.third_party.fla.utils import autotune_cache_kwargs, check_shared_mem
 BKV_LIST = [64, 128] if check_shared_mem() else [32, 64]
 NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
 
-from kairos.modules.utils import IS_METAX
+from kairos.modules.utils import FLAGS_KAIROS_IS_METAX
 
-if IS_METAX:
+if FLAGS_KAIROS_IS_METAX:
     configs_triton = [
         triton.Config({'BK': 16, 'BV': 128}, num_warps=4, num_stages=4),
         # triton.Config({'BK': 64, 'BV': 64}, num_warps=4, num_stages=3),

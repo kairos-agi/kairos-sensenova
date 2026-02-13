@@ -29,13 +29,9 @@ IS_CUDA = torch.cuda.is_available()
 if not IS_CUDA:
     os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
-def get_cuda_sm():
-    if not IS_CUDA:
-        return None
-    major, minor = torch.cuda.get_device_capability()
-    return major * 10 + minor 
-CUDA_SM = get_cuda_sm()
-if CUDA_SM == 80:
+from kairos.modules.utils import FLAGS_KAIROS_CUDA_SM
+
+if FLAGS_KAIROS_CUDA_SM == 80:
     try:
         from sageattention import sag_attention_with_window
         SAGE_ATTN_AVAILABLE = True
@@ -52,7 +48,7 @@ from torch.distributed import ProcessGroup, get_process_group_ranks
 from kairos.third_party.fla.layers.gated_deltanet_with_tp import GatedDeltaNet as GatedDeltaNetWithTP
 from kairos.third_party.fla.models.utils import Cache as fla_Cahce
 import torch.distributed as dist
-from kairos.modules.utils import parallel_state, IS_METAX
+from kairos.modules.utils import parallel_state, FLAGS_KAIROS_IS_METAX
 from kairos.modules.utils.linear import ColumnParallelLinear,RowParallelLinear
 
 
@@ -470,7 +466,7 @@ class SelfAttentionTP(nn.Module):
 
         v = self.v(x)
     
-        if IS_METAX:
+        if FLAGS_KAIROS_IS_METAX:
             q = rope_apply_for3d_triton(q, f, freqs, self.num_heads_local)
             k = rope_apply_for3d_triton(k, f, freqs, self.num_heads_local)
         else:
