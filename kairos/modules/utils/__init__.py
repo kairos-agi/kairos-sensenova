@@ -8,3 +8,5 @@ from .prompt_rewriter import PromptRewriter
 
 from .parallel_utils import parallel_state
 
+from .flags import  plat_device, IS_METAX
+

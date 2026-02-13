@@ -11,8 +11,8 @@ from kairos.third_party.fla.utils import autotune_cache_kwargs, check_shared_mem
 
 NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8, 16]
 
-import os
-IS_METAX = os.environ.get("IS_METAX", "0") == "1"
+from kairos.modules.utils import IS_METAX
+
 if IS_METAX:
     num_stages_range = [1]
     num_warps_range = [4]
