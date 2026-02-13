@@ -15,9 +15,8 @@ from typing import List, Optional, Tuple, Union
 from kairos.modules.dits.fla_local.ops.utils import prepare_chunk_indices, prepare_sequence_ids
 from kairos.modules.dits.fla_local.utils import autotune_cache_kwargs, get_multiprocessor_count, input_guard, is_amd
 
+from kairos.modules.utils import IS_METAX
 
-import os
-IS_METAX = os.environ.get("IS_METAX", "0") == "1"
 if IS_METAX:
     NUM_WARPS_AUTOTUNE = [2, 4, 8, 16]
     STATIC_WARPS = 16

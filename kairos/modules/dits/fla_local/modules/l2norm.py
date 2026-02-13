@@ -8,8 +8,8 @@ import triton.language as tl
 
 from kairos.modules.dits.fla_local.utils import autotune_cache_kwargs, input_guard, is_amd
 
-import os
-IS_METAX = os.environ.get("IS_METAX", "0") == "1"
+from kairos.modules.utils import IS_METAX
+
 if IS_METAX:
     BT_LIST = [8, 16, 32, 64] 
 else:

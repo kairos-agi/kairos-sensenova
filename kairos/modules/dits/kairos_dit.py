@@ -36,11 +36,7 @@ from torch.distributed import ProcessGroup, get_process_group_ranks
 from kairos.modules.dits.fla_local.layers.gated_deltanet_with_tp import GatedDeltaNet as GatedDeltaNetWithTP
 from kairos.modules.dits.fla_local.models.utils import Cache as fla_Cahce
 import torch.distributed as dist
-from kairos.modules.utils import parallel_state
-
-# 获取环境变量，默认 0（非沐曦）
-import os
-IS_METAX = os.environ.get("IS_METAX", "0") == "1"
+from kairos.modules.utils import parallel_state, IS_METAX
 
 #================================================================
 #====================rope_apply_for3d_triton当前只适用于沐曦========
