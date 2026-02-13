@@ -15,8 +15,14 @@ from typing import List, Optional, Tuple, Union
 from kairos.third_party.fla.ops.utils import prepare_chunk_indices, prepare_sequence_ids
 from kairos.third_party.fla.utils import autotune_cache_kwargs, get_multiprocessor_count, input_guard, is_amd
 
-NUM_WARPS_AUTOTUNE = [2, 4, 8, 16] if is_amd else [4, 8, 16, 32]
-STATIC_WARPS = 32 if not is_amd else 16
+from kairos.modules.utils import FLAGS_KAIROS_IS_METAX
+
+if FLAGS_KAIROS_IS_METAX:
+    NUM_WARPS_AUTOTUNE = [2, 4, 8, 16]
+    STATIC_WARPS = 16
+else:
+    NUM_WARPS_AUTOTUNE = [2, 4, 8, 16] if is_amd else [4, 8, 16, 32]
+    STATIC_WARPS = 32 if not is_amd else 16
 
 
 try:

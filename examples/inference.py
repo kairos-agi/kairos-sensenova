@@ -11,7 +11,7 @@ from kairos.apis.builder import build_model_pipeline
 from kairos.modules.utils.prompt_rewriter import PromptRewriter
 import torch
 from PIL import Image
-from kairos.modules.utils import save_video, save_image, parallel_state
+from kairos.modules.utils import save_video, save_image, parallel_state, FLAGS_KAIROS_PLAT_DEVICE
 
 def parse_args():
     parser = argparse.ArgumentParser(description='TRAIN_MODEL_LOOP')

@@ -8,3 +8,5 @@ from .prompt_rewriter import PromptRewriter
 
 from .parallel_utils import parallel_state
 
+from .flags import  FLAGS_KAIROS_PLAT_DEVICE, FLAGS_KAIROS_IS_METAX, FLAGS_KAIROS_CUDA_SM
+

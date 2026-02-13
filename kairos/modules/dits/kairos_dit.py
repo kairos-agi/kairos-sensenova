@@ -29,13 +29,9 @@ IS_CUDA = torch.cuda.is_available()
 if not IS_CUDA:
     os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
-def get_cuda_sm():
-    if not IS_CUDA:
-        return None
-    major, minor = torch.cuda.get_device_capability()
-    return major * 10 + minor 
-CUDA_SM = get_cuda_sm()
-if CUDA_SM == 80:
+from kairos.modules.utils import FLAGS_KAIROS_CUDA_SM
+
+if FLAGS_KAIROS_CUDA_SM == 80:
     try:
         from sageattention import sag_attention_with_window
         SAGE_ATTN_AVAILABLE = True
@@ -52,8 +48,150 @@ from torch.distributed import ProcessGroup, get_process_group_ranks
 from kairos.third_party.fla.layers.gated_deltanet_with_tp import GatedDeltaNet as GatedDeltaNetWithTP
 from kairos.third_party.fla.models.utils import Cache as fla_Cahce
 import torch.distributed as dist
-from kairos.modules.utils import parallel_state
+from kairos.modules.utils import parallel_state, FLAGS_KAIROS_IS_METAX
 from kairos.modules.utils.linear import ColumnParallelLinear,RowParallelLinear
+
+
+#================================================================
+#====================rope_apply_for3d_triton当前只适用于沐曦========
+#================================================================
+import triton
+import triton.language as tl
+from fla.utils import autotune_cache_kwargs
+
+def rope_apply_for3d_triton(x, num_frames, freqs, num_heads):
+    assert x.is_contiguous(), "x 必须是 contiguous 的 [B,L,D]"
+    B, T, D = x.shape
+    H = num_heads
+    x = rearrange(x, "b s (n d) -> b s n d", n=num_heads) # [B,T,H,HD] ([1,720000,20,128]) bf16
+    HD = x.shape[-1]
+    C = HD // 2 # 64
+    # freqs: [L, 1, HD/2] complex
+    assert freqs.shape[0] == T and freqs.shape[1] == 1
+    assert HD % freqs.shape[-1] == 0
+    assert freqs.shape[-1] == C
+    freqs_scalar = torch.view_as_real(freqs)
+    assert x.is_contiguous()
+    assert freqs_scalar.is_contiguous()
+
+    # 输出 buffer，同 layout
+    out = torch.empty_like(x) # [B,L,H,D] ([1,720000,20,128]) bf16
+
+    def grid(meta):
+        BT = meta['BT']
+        return (triton.cdiv(T, BT), B * H)
+    rope_apply_for_3d_kernel[grid](
+        x, freqs_scalar, out,
+        B, T, H, C, HD,
+    )
+    out = out.reshape(B, T, D)
+    return out
+
+@triton.autotune(
+    configs=[
+        triton.Config({'BT': BT}, num_warps=num_warps, num_stages=num_stages)
+        for num_warps in [4]
+        for num_stages in [8]
+        for BT in [32]
+    ],
+    key=['B', 'T'],
+    use_cuda_graph=False,
+    **autotune_cache_kwargs
+)
+@triton.jit
+def rope_apply_for_3d_kernel(
+    x_bf16,
+    freqs_f64,
+    out_bf16,
+    B,
+    T,
+    H:  tl.constexpr,
+    C:  tl.constexpr,
+    HD: tl.constexpr,
+    BT: tl.constexpr,
+):
+    pid_t  = tl.program_id(0)
+    pid_bh = tl.program_id(1)
+
+    b = pid_bh // H
+    h = pid_bh % H
+    if b >= B:
+        return
+
+    t_start = pid_t * BT
+
+    # 复数通道 index: 0..C-1
+    offs_c = tl.arange(0, C)  # [C]
+
+    for dt in range(0, BT):
+        t = t_start + dt
+        mask_t = t < T         # 当前这一行是否有效（标量 bool）
+
+        # 如果这一 dt 已经越界了，不 return，只是把 load/store 全部 mask 掉
+        # x[b, t, h, d]，d = 0..HD-1
+        base_x = ((b * T + t) * H + h) * HD
+
+        idx_real = base_x + 2 * offs_c       # d = 2c
+        idx_imag = idx_real + 1              # d = 2c + 1
+
+        # 每个通道都复用同一个 time-mask
+        mask_elem = mask_t                   # 形状 [C]，广播到 [C]
+
+        # -------- x: bf16 → float64，拆成实部/虚部 --------
+        x_real_bf16 = tl.load(
+            x_bf16 + idx_real,
+            mask=mask_elem,
+            other=0.0,
+        )                                    # [C]
+        x_imag_bf16 = tl.load(
+            x_bf16 + idx_imag,
+            mask=mask_elem,
+            other=0.0,
+        )                                    # [C]
+        x_real_f64 = x_real_bf16.to(tl.float64)
+        x_imag_f64 = x_imag_bf16.to(tl.float64)
+
+        # -------- freqs: float64 视图 [T, 2*C] --------
+        # 假设 freqs_f64 按 [t, 2*C] 摊平成一维：
+        # real 在偶数位，imag 在奇数位
+        base_f = t * (2 * C)                 # 对应 freqs[t, 0]
+        idx_freq_real = base_f + 2 * offs_c
+        idx_freq_imag = idx_freq_real + 1
+
+        freq_real_f64 = tl.load(
+            freqs_f64 + idx_freq_real,
+            mask=mask_elem,
+            other=0.0,
+        )
+        freq_imag_f64 = tl.load(
+            freqs_f64 + idx_freq_imag,
+            mask=mask_elem,
+            other=0.0,
+        )
+
+        # -------- 复数乘 (fp64) --------
+        # (x_r + i x_i) * (f_r + i f_i)
+        y_real_f64 = x_real_f64 * freq_real_f64 - x_imag_f64 * freq_imag_f64
+        y_imag_f64 = x_real_f64 * freq_imag_f64 + x_imag_f64 * freq_real_f64
+
+        # 先 f64 -> f32
+        y_real_f32 = y_real_f64.to(tl.float32)
+        y_imag_f32 = y_imag_f64.to(tl.float32)
+
+        # 再 f32 -> bf16
+        y_real_bf16 = y_real_f32.to(tl.bfloat16)
+        y_imag_bf16 = y_imag_f32.to(tl.bfloat16)
+
+        tl.store(
+            out_bf16 + idx_real,
+            y_real_bf16,
+            mask=mask_elem,
+        )
+        tl.store(
+            out_bf16 + idx_imag,
+            y_imag_bf16,
+            mask=mask_elem,
+        )
 
 def flash_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, num_heads: int, 
                     compatibility_mode=False, attn_mask=None, window_size=(-1, -1), return_attn_probs=False):
@@ -328,8 +466,12 @@ class SelfAttentionTP(nn.Module):
 
         v = self.v(x)
     
-        q = rope_apply_for3d(q, f, freqs, self.num_heads_local)
-        k = rope_apply_for3d(k, f, freqs, self.num_heads_local)
+        if FLAGS_KAIROS_IS_METAX:
+            q = rope_apply_for3d_triton(q, f, freqs, self.num_heads_local)
+            k = rope_apply_for3d_triton(k, f, freqs, self.num_heads_local)
+        else:
+            q = rope_apply_for3d(q, f, freqs, self.num_heads_local)
+            k = rope_apply_for3d(k, f, freqs, self.num_heads_local)
 
         use_dilated = dilated_length > 1 and x.shape[1] // (dilated_length * L) > 1
     
