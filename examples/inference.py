@@ -32,7 +32,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    cfg_path = "kairos/configs/kairos_4b_config.py"
+    cfg_path = "kairos/configs/kairos_4b_config_DMD.py"
 
     if cfg_path == '':
         ValueError('config path is empty')

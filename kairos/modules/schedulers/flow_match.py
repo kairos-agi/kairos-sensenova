@@ -119,3 +119,28 @@ class FlowMatchScheduler():
         b = base_shift - m * base_seq_len
         mu = image_seq_len * m + b
         return mu
+
+class DMDFlowMatchScheduler(FlowMatchScheduler):
+
+    def set_timesteps(
+            self,
+            selected_sampling_time=[1000, 750, 500, 250],
+            dynamic_shift_len=None,
+            num_frames=1,
+            shift=None):
+        self.sigmas = torch.tensor(selected_sampling_time) / self.num_train_timesteps
+        if shift is not None:
+            self.shift = shift
+        if self.exponential_shift:           
+            mu = self.calculate_shift(image_seq_len=dynamic_shift_len)
+            self.shift = math.exp(mu) * math.sqrt(num_frames)
+            self.sigmas = self.shift / (self.shift + (1 / self.sigmas - 1))
+        else:
+            self.sigmas = self.shift * self.sigmas / (1 + (self.shift - 1) * self.sigmas)
+        if self.shift_terminal is not None:
+            one_minus_z = 1 - self.sigmas
+            scale_factor = one_minus_z[-1] / (1 - self.shift_terminal)
+            self.sigmas = 1 - (one_minus_z / scale_factor)
+        if self.reverse_sigmas:
+            self.sigmas = 1 - self.sigmas
+        self.timesteps = self.sigmas * self.num_train_timesteps
