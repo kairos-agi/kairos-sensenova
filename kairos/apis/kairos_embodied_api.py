@@ -65,7 +65,7 @@ class KairosEmbodiedAPI(torch.nn.Module):
                 if load_dit_fn == 'strict_load':
                     print(f'using strict_load || Loading DiT from {pretrained_dit}')
                     state_dict = load_state_dict(pretrained_dit)
-                    dit.load_state_dict(state_dict, strict=False)
+                    dit.load_state_dict(state_dict, strict=True)
                 else:
                     raise NotImplementedError()
                 
