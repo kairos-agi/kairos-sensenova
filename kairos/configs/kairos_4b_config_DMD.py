@@ -1,8 +1,10 @@
 
-pretrained_dit = '/kairos_vepfs_volc/action/lipu/workshop/kairos_dmd_20260217_step_4_rcm/step-3000.safetensors'
-# pretrained_dit = '/kairos-engineer/ModelZoo/Moda//Common/Predict/WM-Predict-LatentFeature-LatentFeature-Common-BF16-v0.0.1/model.safetensors'
-text_encoder_path = '/kairos-engineer/ModelZoo/Moda/Common/GEncoder/WM-GEncoder-VL-LatentFeature-Common-BF16-v0.0.1/'
-vae_path = '/kairos-engineer/ModelZoo/Moda//Common/GDecoder/WM-GDecoder-LatentFeature-Video-Common-BF16-v2.1.0//Wan2.1_VAE.pth' 
+KAIROS_MODEL_DIR = 'models'
+
+text_encoder_path =  f'{KAIROS_MODEL_DIR}/Qwen_AWQ/'
+vae_path = f'{KAIROS_MODEL_DIR}/Wan2.1_VAE.pth'
+prompt_rewriter_path = f'{KAIROS_MODEL_DIR}/Qwen/Qwen3-VL-8B-Instruct/'
+pretrained_dit = '/data/wuxn/kairos-4b-480p-dmd.safetensors'
 
 tokenizer_path=None
 
@@ -12,11 +14,11 @@ pipeline = dict(
     parallel_mode="cp",
     use_cfg_parallel=False,
     pipeline_type='KairosEmbodiedPipeline_DMD',
-    # trainable_models='dit',
     pipeline_args = dict(
         vae_path=vae_path,
         text_encoder_path=text_encoder_path,
         load_dit_fn='strict_load',
+        vram_management_enabled=False,
         selected_sampling_time = [1000, 800, 500, 100],
         dit_config = {
             "dit_type" : 'KairosDiT',
