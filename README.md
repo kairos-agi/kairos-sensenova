@@ -140,7 +140,6 @@ We enhance the inference computational efficiency of the Kairos 3.0 model on var
         <tr>
             <th style="text-align: center;">1</th>
             <th style="text-align: center;">4</th>
-            <th style="text-align: center;">8</th>
         </tr>
     </thead>
     <tbody>
@@ -148,45 +147,21 @@ We enhance the inference computational efficiency of the Kairos 3.0 model on var
             <td style="text-align: center;">Nvidia</td>
             <td style="text-align: center;">A800</td>
             <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">720P</td>
-            <td style="text-align: center;">int4+bf16</td>
-            <td style="text-align: center;">44.6</td>
-            <td style="text-align: center;">230.9</td>
-            <td style="text-align: center;">64.5</td>
-            <td style="text-align: center;">38.2</td>
+            <td style="text-align: center;">480P</td>
+            <td style="text-align: center;">int4+int8</td>
+            <td style="text-align: center;">23.5</td>
+            <td style="text-align: center;">11.7</td>
+            <td style="text-align: center;">3.0</td>
         </tr>
         <tr>
             <td style="text-align: center;">Nvidia</td>
             <td style="text-align: center;">5090</td>
             <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">720P</td>
+            <td style="text-align: center;">480P</td>
             <td style="text-align: center;">int4+bf16</td>
-            <td style="text-align: center;">30.4</td>
-            <td style="text-align: center;">249.0</td>
-            <td style="text-align: center;">89.5</td>
-            <td style="text-align: center;">...</td>
-        </tr>
-        <tr>
-            <td style="text-align: center;">MetaX</td>
-            <td style="text-align: center;">C500</td>
-            <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">720P</td>
-            <td style="text-align: center;">bf16</td>
-            <td style="text-align: center;">48.7</td>
-            <td style="text-align: center;">388.4</td>
-            <td style="text-align: center;">119.0</td>
-            <td style="text-align: center;">...</td>
-        </tr>
-        <tr>
-            <td style="text-align: center;">Hygon</td>
-            <td style="text-align: center;">BW1000</td>
-            <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">720P</td>
-            <td style="text-align: center;">bf16</td>
-            <td style="text-align: center;">xx</td>
-            <td style="text-align: center;">...</td>
-            <td style="text-align: center;">...</td>
-            <td style="text-align: center;">...</td>
+            <td style="text-align: center;">13.9</td>
+            <td style="text-align: center;">11.4</td>
+            <td style="text-align: center;">5.7</td>
         </tr>
     </tbody>
 </table>

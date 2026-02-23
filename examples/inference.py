@@ -2,6 +2,7 @@ import sys
 import os
 import argparse
 
+import time
 from mmengine import Config
 import mmengine
 from mmengine.dist import init_dist, get_dist_info
@@ -21,6 +22,48 @@ def parse_args():
 
     return args
 
+def print_gpu_memory(device_id=0):
+    """
+     打印指定 GPU 的显存使用情况（只统计 PyTorch 占用）
+
+    """
+        # 1. 获取当前进程的rank值（适配常见的分布式训练环境变量）
+    def get_current_rank():
+        # 优先读取LOCAL_RANK（单机多卡），其次是RANK（多机多卡）
+        rank = os.environ.get("LOCAL_RANK") or os.environ.get("RANK")
+        if rank is None:
+            # 未找到rank环境变量，默认使用0号卡
+            print("警告：未检测到RANK/LOCAL_RANK环境变量，默认使用GPU 0")
+            return 0
+        try:
+            return int(rank)
+        except ValueError:
+            print(f"警告：环境变量中的rank值 '{rank}' 不是有效数字，默认使用GPU 0")
+            return 0
+
+    # 获取当前rank对应的显卡ID
+    device_id = get_current_rank()
+
+    # 安全检查：确保显卡ID有效
+    if device_id >= torch.cuda.device_count():
+        print(f"警告：rank {device_id} 对应的GPU ID超出可用范围（可用GPU数：{torch.cuda.device_count()}），默认使用GPU 0")
+        device_id = 0
+    # 切换到目标 GPU
+    torch.cuda.set_device(device_id)
+    
+    # 1. PyTorch 实际使用的显存（核心）
+    used = torch.cuda.memory_allocated(device_id) / 1024**3  # 转 GB
+    # 2. PyTorch 缓存的显存（闲置未释放）
+    cached = torch.cuda.memory_reserved(device_id) / 1024**3
+    # 3. GPU 总显存
+    total = torch.cuda.get_device_properties(device_id).total_memory / 1024**3
+    
+    print(f"GPU {device_id} 显存统计：")
+    print(f"  实际使用：{used:.2f} GB")
+    print(f"  缓存显存：{cached:.2f} GB")
+    print(f"  总显存：{total:.2f} GB")
+    print(f"  实际使用率：{used/total*100:.2f}%")
+
 if __name__ == '__main__':
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     torch.cuda.set_device(local_rank)
@@ -32,7 +75,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    cfg_path = "kairos/configs/kairos_4b_config.py"
+    cfg_path = "kairos/configs/kairos_4b_config_DMD.py"
 
     if cfg_path == '':
         ValueError('config path is empty')
@@ -155,7 +198,20 @@ if __name__ == '__main__':
         prompt_prefix = 'high-quality video, realistic motion, single continuous shot, no jump cuts, smooth motion. '
         input_args_d['prompt'] = prompt_prefix + input_args_d['prompt']
 
+    print(f'=====================warmup====================')
+    pipeline(**input_args_d)
+
+
+    print_gpu_memory()
+
+    print(f'=====================infer====================')
+
+    start_time = time.perf_counter()
     video = pipeline(**input_args_d)
+
+    elapsed = time.perf_counter() - start_time
+
+    print(f"infer time: {elapsed:.4f}s")
     print('infer done')
 
     # save video
@@ -169,3 +225,4 @@ if __name__ == '__main__':
 
     if dist.is_initialized():
         dist.destroy_process_group()
+
