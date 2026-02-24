@@ -218,6 +218,12 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         progress_bar_cmd=tqdm,
         parallel_mode: Optional[str] = None,
     ):
+        if seed != None:
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
+
         # Scheduler
         # 1) 计算 latent 时间尺寸
         latent_T = (num_frames - 1) // self.time_division_factor + 1
@@ -276,7 +282,8 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         # Denoise
         self.load_models_to_device(self.in_iteration_models)
         models = {name: getattr(self, name) for name in self.in_iteration_models}
-        times = 0
+
+
         for progress_id, timestep in enumerate(progress_bar_cmd(self.scheduler.timesteps)):
             # Switch DiT if necessary
             if timestep.item() < switch_DiT_boundary * self.scheduler.num_train_timesteps and self.dit2 is not None and not models["dit"] is self.dit2:
