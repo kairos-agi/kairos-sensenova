@@ -32,7 +32,6 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
 )
 
 import torch.nn.functional as F
-import torch.distributed as dist
 
 @KAIROS_PROCESSOR.register_module()
 class KairosEmbodiedPipeline_DMD(BasePipeline):
@@ -225,17 +224,17 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
             torch.cuda.manual_seed_all(seed)
 
         # Scheduler
-        # 1) 计算 latent 时间尺寸
+        # 1) Compute latent temporal length.
         latent_T = (num_frames - 1) // self.time_division_factor + 1
         if vace_reference_image is not None:
             latent_T += 1
 
-        # 2) latent 空间尺寸（依赖 VAE 下采样）
+        # 2) Compute latent spatial resolution (depends on VAE down/up-sampling factor).
         u = getattr(self.vae, "upsampling_factor", 8)
         latent_H = height // u
         latent_W = width  // u
 
-        # 3) patch size（优先从 dit 里取，取不到默认 4）
+        # 3) Resolve DiT patch size (prefer model attribute; fall back to 4).
         ps = getattr(self.dit, "patch_size", 4)
         if isinstance(ps, (tuple, list)):
             ph, pw = ps[-2], ps[-1]
@@ -279,6 +278,7 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         inputs_shared["latents"] = inputs_shared["noise"]        
         if 'first_frame_latents' in inputs_shared:
             inputs_shared["latents"][:, :, 0:1] = inputs_shared["first_frame_latents"]
+
         # Denoise
         self.load_models_to_device(self.in_iteration_models)
         models = {name: getattr(self, name) for name in self.in_iteration_models}
@@ -311,7 +311,7 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
             
                 if "first_frame_latents" in inputs_shared:
                     inputs_shared["latents"][:, :, 0:1] = inputs_shared["first_frame_latents"]
-        
+
         # VACE (TODO: remove it)
         if vace_reference_image is not None:
             inputs_shared["latents"] = inputs_shared["latents"][:, :, 1:]
@@ -325,7 +325,6 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         self.load_models_to_device([])
 
         return video
-
 
     def preprocess_video(self, videos, torch_dtype=None, device=None, pattern="B C T H W", min_value=-1, max_value=1):
         res = []
@@ -1080,7 +1079,6 @@ def model_fn_wan_video(
         )
 
     if use_unified_sequence_parallel:
-        import torch.distributed as dist
         from xfuser.core.distributed import (get_sequence_parallel_rank,
                                             get_sequence_parallel_world_size,
                                             get_sp_group)
@@ -1240,7 +1238,6 @@ def model_fn_wans2v(
     use_unified_sequence_parallel=False,
 ):
     if use_unified_sequence_parallel:
-        import torch.distributed as dist
         from xfuser.core.distributed import (get_sequence_parallel_rank,
                                             get_sequence_parallel_world_size,
                                             get_sp_group)

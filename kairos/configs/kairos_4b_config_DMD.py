@@ -1,10 +1,10 @@
 
 KAIROS_MODEL_DIR = 'models'
 
-text_encoder_path =  f'{KAIROS_MODEL_DIR}/Qwen_AWQ/'
-vae_path = f'{KAIROS_MODEL_DIR}/Wan2.1_VAE.pth'
+pretrained_dit = f'{KAIROS_MODEL_DIR}/Kairos/models/robot/kairos-robot-4B-480P-16fps-distilled.safetensors'
+text_encoder_path =  f'{KAIROS_MODEL_DIR}/Qwen/Qwen2.5-VL-7B-Instruct-AWQ/'
+vae_path = f'{KAIROS_MODEL_DIR}/Wan2.1-T2V-14B/Wan2.1_VAE.pth'
 prompt_rewriter_path = f'{KAIROS_MODEL_DIR}/Qwen/Qwen3-VL-8B-Instruct/'
-pretrained_dit = '/data/wuxn/kairos-4b-480p-dmd.safetensors'
 
 tokenizer_path=None
 

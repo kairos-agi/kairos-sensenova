@@ -171,8 +171,9 @@ We enhance the inference computational efficiency of the Kairos 3.0 model on var
 - **TeaCache Scheduling**: reuse cached intermediate states across diffusion steps to cut redundant computation and improve stability.
 - **SP/TP Parallelism**: sequence/tensor parallel execution to scale throughput at higher batch sizes and longer sequences.
 - **CPU OffLoad**: offload selected weights/activations to host memory to fit larger models on limited VRAM.
-- **W8A8 Quantization**: apply 8-bit weight/activation quantization to reduce memory footprint and improve throughput.
-- **Operator Fusion**: fuse common kernels to reduce launch overhead and improve utilization.
+- **int4（W4A16）VLM**: INT4 Quantization for Vision-Language Models (VLMs)  This balances model size reduction with retention of activation precision, which can be crucial for tasks involving visual and textual data.
+- **Sage Attention**: SageAttention is an efficient 8-bit quantization method specifically designed to accelerate the core attention mechanism in Transformer models without requiring model retraining. It addresses the computational bottleneck of standard attention, which has a complexity of O(N²), by implementing INT8 quantization for the Query (Q) and Key (K) matrices.
+- **Torch.compile**: It simplifies the process of accelerating neural network training and inference by automatically applying graph optimizations, kernel fusion, and hardware-specific optimizations.
 
 ### Performance Benchmarks
 The bar charts below illustrate relative latency improvements across optimization stages. Replace the placeholder values with your official measurements.

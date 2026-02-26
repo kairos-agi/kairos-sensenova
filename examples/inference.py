@@ -124,12 +124,6 @@ if __name__ == '__main__':
         else:
             cfg_size = 1
             tp_size = world_size
-            # attention head number
-            NUM_HEADS = 20
-            assert NUM_HEADS % tp_size == 0, (
-                f"Pure-TP mode requires num_heads({NUM_HEADS}) % tp_size({tp_size}) == 0. "
-                f"Please change GPU count or enable CFG-parallel."
-            )
 
         # ---- TP group ----
         if tp_size == world_size:
