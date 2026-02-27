@@ -216,7 +216,7 @@ docker run --rm -it \
 pip install -r requirements.txt
 ```
 
-### Run Inference
+### 6.2 Run Inference
 ```bash
 # Step1: Fetch the Model
 pip install -U huggingface_hub modelscope
