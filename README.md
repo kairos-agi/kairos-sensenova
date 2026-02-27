@@ -45,7 +45,7 @@ Introducing the first Hybrid Linear Attention operator specifically for world mo
         </tr>
     </thead>
     <tbody>
-        <tr>
+            <tr>
             <td style="text-align: center;"><img src="assets/videos/physical-1.gif" width="240"/></td>
             <td style="text-align: center;"><img src="assets/videos/cross-1.gif" width="240"/></td>
             <td style="text-align: center;" rowspan="3"><img src="assets/videos/hpc.gif" width="240"/></td>
@@ -72,10 +72,10 @@ Real-time Edge Performance: Industry-leading inference speed with ultra-low reso
 ## 📦 4. Model Zoo
 | Model Version | Resolution | Use cases | Highlights |
 |:---:|:---:|:---:|:---:|
-| [kairos-4B 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/kairos-common-4B-480P-16fps.safetensors) | 480P | 480p general pretrained model | 480p pretrained model for downstream fine-tuning. |
-| [kairos-4B-robot 480p](https://huggingface.co/kairos-agi/kairos-sensenova-robot/blob/main/models/kairos-robot-4B-480P-16fps.safetensors) | 480P | Robot manipulation & real-world closed-loop control | Specialized for embodied AI; leading accuracy on PAI-Bench |
-| [kairos-4B-robot 480p distillation](https://huggingface.co/kairos-agi/kairos-sensenova-robot/blob/main/models/kairos-robot-4B-480P-16fps-distilled.safetensors) | 480P | On-robot Integration、Edge Computing、Low-power Efficiency | Ultra-lightweight via distillation; enables real-time inference on embedded/edge devices. |
-| [kairos-4B 720p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/kairos-common-4B-720P-16fps.safetensors) | 720P | HD visual generation & complex physical reasoning | Supports 720P HD output with enhanced fine-grained detail capture. |
+| [kairos-4B 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/common/kairos-common-4B-480P-16fps.safetensors) | 480P | 480p general pretrained model | 480p pretrained model for downstream fine-tuning. |
+| [kairos-4B-robot 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/robot/kairos-robot-4B-480P-16fps.safetensors) | 480P | Robot manipulation & real-world closed-loop control | Specialized for embodied AI; leading accuracy on PAI-Bench |
+| [kairos-4B-robot 480p distillation](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/robot/kairos-robot-4B-480P-16fps-distilled.safetensors) | 480P | On-robot Integration、Edge Computing、Low-power Efficiency | Ultra-lightweight via distillation; enables real-time inference on embedded/edge devices. |
+| [kairos-4B 720p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/common/kairos-common-4B-720P-16fps.safetensors) | 720P | HD visual generation & complex physical reasoning | Supports 720P HD output with enhanced fine-grained detail capture. |
 
 ## 📈5. Evaluation 
 ### 🎯 5.1 Accuracy Benchmarks
@@ -224,22 +224,21 @@ pip install -r requirements.txt
 ```bash
 # Step1: Fetch the Model
 pip install -U huggingface_hub 
-mkdir -p models/Kairos-model models/Qwen models/Wan2.1-T2V-14B
+mkdir -p models/Kairos models/Qwen models/Wan2.1-T2V-14B
 
 # Download kairos model
 hf download kairos-agi/kairos-sensenova-common \
-  --local-dir models/Kairos-model \
-  --local-dir-use-symlinks False
+  --local-dir models/Kairos \
+  --include "*.safetensors"
   
 # Download Qwen2.5-VL for Text-Encoder
 hf download Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
   --local-dir models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
-  --local-dir-use-symlinks False
+  --include "*.safetensors"  
   
 # Dowload Wan2.1-VAE for VAE-Encoder/Decoder
 hf download Wan-AI/Wan2.1-T2V-14B \
   --local-dir models/Wan2.1-T2V-14B \
-  --local-dir-use-symlinks False
   --include "Wan2.1_VAE.pth"  
 
 # Step2: Run the examples
