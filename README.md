@@ -46,17 +46,17 @@ Introducing the first Hybrid Linear Attention operator specifically for world mo
     </thead>
     <tbody>
         <tr>
-            <td style="text-align: center;"><video src="assets/videos/physical-1.gif" width="240" controls muted loop></video></td>
-            <td style="text-align: center;"><video src="assets/videos/cross-1.gif" width="240" controls muted loop></video></td>
-            <td style="text-align: center;" rowspan="3"><video src="assets/videos/hpc.gif" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><img src="assets/videos/physical-1.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/cross-1.gif" width="240"/></td>
+            <td style="text-align: center;" rowspan="3"><img src="assets/videos/hpc.gif" width="240"/></td>
         </tr>
         <tr>
-            <td style="text-align: center;"><video src="assets/videos/physical-2.gif" width="240" controls muted loop></video></td>
-            <td style="text-align: center;"><video src="assets/videos/cross-2.gif" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><img src="assets/videos/physical-2.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/cross-2.gif" width="240"/></td>
         </tr>
         <tr>
-            <td style="text-align: center;"><video src="assets/videos/physical-3.gif" width="240" controls muted loop></video></td>
-            <td style="text-align: center;"><video src="assets/videos/cross-3.gif" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><img src="assets/videos/physical-3.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/cross-3.gif" width="240"/></td>
         </tr>
     </tbody>
 </table>
