@@ -5,7 +5,7 @@
 <p>
 
 <p align="center">
-    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/kairos-agi">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
+    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/kairos-agi">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
 
 -----
 **Kairos 3.0** is grounded in physical laws as its cognitive foundation, establishing a unified cross-embodiment world modeling framework. Featuring a 4B-parameter architecture with a custom hybrid linear attention operator, it unifies multimodal understanding, generation, and action prediction for real-time edge deployment. By achieving physics-level deep cognition and low-latency inference, it empowers high-precision action prediction and HD generation for both physical and digital embodied AI applications.
@@ -15,11 +15,15 @@ While Scaling Laws are emerging in Embodied AI, their efficiency is severely bot
 
 ## 🌟  2. Kairos 3.0  Framework
 
-<p align="center">
-    <img src="assets/1.png" width="32%"/>
-    <img src="assets/2.png" width="32%"/>
-    <img src="assets/3.png" width="32%"/>
-</p>
+<div align="center">
+<table align="center">
+    <tr>
+        <td align="center"><img src="assets/1.png" width="320"/></td>
+        <td align="center"><img src="assets/2.png" width="320"/></td>
+        <td align="center"><img src="assets/3.png" width="320"/></td>
+    </tr>
+</table>
+</div>
 
 ### 🌍 Unified World Modeling Framework
 Kairos 3.0 uses fundamental physical and causal laws as its cognitive foundation. By integrating real-robot interaction, structured human behavior, and Chain-of-Thought (CoT) data, it breaks heterogeneity barriers and boosts data reuse efficiency. This shifts the paradigm from simple imitation to physics-level deep understanding, enabling robust generalization and long-horizon reasoning at a more efficient model scale.
@@ -219,7 +223,7 @@ pip install -r requirements.txt
 ### 6.2 Run Inference
 ```bash
 # Step1: Fetch the Model
-pip install -U huggingface_hub modelscope
+pip install -U huggingface_hub 
 mkdir -p models/Kairos-model models/Qwen models/Wan2.1-T2V-14B
 
 # Download kairos model
