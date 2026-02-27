@@ -77,82 +77,82 @@ Real-time Edge Performance: Industry-leading inference speed with ultra-low reso
 ### 🎯 5.1 Accuracy Benchmarks
 
 <div align="center">
-<table style="text-align: center; margin: 0 auto;">
+<table align="center">
     <thead>
         <tr>
-            <th style="text-align: center;">Domain</th>
-            <th style="text-align: center;">Benchmarks</th>
-            <th style="text-align: center;">Kairos-Robot</th>
-            <th style="text-align: center;">Cosmos 2.5-2B*</th>
-            <th style="text-align: center;">Wan 2.2-5B*</th>
-            <th style="text-align: center;">Cosmos 2.5-14B*</th>
-            <th style="text-align: center;">Lingbot*</th>
+            <th align="center">Domain</th>
+            <th align="center">Benchmarks</th>
+            <th align="center">Kairos-Robot</th>
+            <th align="center">Cosmos 2.5-2B*</th>
+            <th align="center">Wan 2.2-5B*</th>
+            <th align="center">Cosmos 2.5-14B*</th>
+            <th align="center">Lingbot*</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td style="text-align: center;" rowspan="3">Robot</td>
-            <td style="text-align: center;">PAI-Bench-robot</td>
-            <td style="text-align: center;">80.03</td>
-            <td style="text-align: center;">78.3</td>
-            <td style="text-align: center;">78.6</td>
-            <td style="text-align: center;">79.4</td>
-            <td style="text-align: center;">79.96</td>
+            <td align="center" rowspan="3">Robot</td>
+            <td align="center">PAI-Bench-robot</td>
+            <td align="center">80.03</td>
+            <td align="center">78.3</td>
+            <td align="center">78.6</td>
+            <td align="center">79.4</td>
+            <td align="center">79.96</td>
         </tr>
         <tr>
-            <td style="text-align: center;">WorldModelBench-robot TI2V</td>
-            <td style="text-align: center;">9.08</td>
-            <td style="text-align: center;">9.04</td>
-            <td style="text-align: center;">8.52</td>
-            <td style="text-align: center;">8.94</td>
-            <td style="text-align: center;">9.04</td>
+            <td align="center">WorldModelBench-robot TI2V</td>
+            <td align="center">9.08</td>
+            <td align="center">9.04</td>
+            <td align="center">8.52</td>
+            <td align="center">8.94</td>
+            <td align="center">9.04</td>
         </tr>
         <tr>
-            <td style="text-align: center;">DreamGen Bench(PA/IF)</td>
-            <td style="text-align: center;">0.529/0.609</td>
-            <td style="text-align: center;">0.418/0.568</td>
-            <td style="text-align: center;">0.314/0.543</td>
-            <td style="text-align: center;">0.495/0.478</td>
-            <td style="text-align: center;">0.466/0.569</td>
+            <td align="center">DreamGen Bench(PA/IF)</td>
+            <td align="center">0.529/0.609</td>
+            <td align="center">0.418/0.568</td>
+            <td align="center">0.314/0.543</td>
+            <td align="center">0.495/0.478</td>
+            <td align="center">0.466/0.569</td>
         </tr>
     </tbody>
 </table>
 </div>
 
 <div align="center">
-<table style="text-align: center; margin: 0 auto;">
+<table align="center">
     <thead>
         <tr>
-            <th style="text-align: center;">Domain</th>
-            <th style="text-align: center;">Benchmarks</th>
-            <th style="text-align: center;">Kairos 3.0-4B</th>
-            <th style="text-align: center;">Cosmos 2.5-2B*</th>
-            <th style="text-align: center;">Wan 2.2-5B*</th>
-            <th style="text-align: center;">Cosmos 2.5-14B</th>
+            <th align="center">Domain</th>
+            <th align="center">Benchmarks</th>
+            <th align="center">Kairos 3.0-4B</th>
+            <th align="center">Cosmos 2.5-2B*</th>
+            <th align="center">Wan 2.2-5B*</th>
+            <th align="center">Cosmos 2.5-14B</th>
         </tr>
     </thead>
     <tbody>
         <tr>
-            <td style="text-align: center;" rowspan="3">General</td>
-            <td style="text-align: center;">PAI-Bench</td>
-            <td style="text-align: center;">80.84</td>
-            <td style="text-align: center;">81.0</td>
-            <td style="text-align: center;">80.4</td>
-            <td style="text-align: center;">81.0</td>
+            <td align="center" rowspan="3">General</td>
+            <td align="center">PAI-Bench</td>
+            <td align="center">80.84</td>
+            <td align="center">81.0</td>
+            <td align="center">80.4</td>
+            <td align="center">81.0</td>
         </tr>
         <tr>
-            <td style="text-align: center;">WorldModelBench</td>
-            <td style="text-align: center;">8.94</td>
-            <td style="text-align: center;">8.86</td>
-            <td style="text-align: center;">8.70</td>
-            <td style="text-align: center;">9.02*</td>
+            <td align="center">WorldModelBench</td>
+            <td align="center">8.94</td>
+            <td align="center">8.86</td>
+            <td align="center">8.70</td>
+            <td align="center">9.02*</td>
         </tr>
         <tr>
-            <td style="text-align: center;">VideoPHY</td>
-            <td style="text-align: center;">45.55</td>
-            <td style="text-align: center;">44.64</td>
-            <td style="text-align: center;">38.85</td>
-            <td style="text-align: center;">-</td>
+            <td align="center">VideoPHY</td>
+            <td align="center">45.55</td>
+            <td align="center">44.64</td>
+            <td align="center">38.85</td>
+            <td align="center">-</td>
         </tr>
     </tbody>
 </table>
@@ -162,8 +162,8 @@ Real-time Edge Performance: Industry-leading inference speed with ultra-low reso
 
 Kairos models deliver SOTA performance across diverse benchmarks. In embodied scenarios, Kairos-Robot leads PAI-Bench with a score of 80.08 and dominates generalization tasks in DreamGen Bench. For general world modeling, Kairos 3.0-4B matches or exceeds larger-scale models on WorldModelBench and VideoPHY, achieving a perfect balance of precision and efficiency at a compact 4B scale.
 
-## ⚡ 5.2 Deployment
-### 5.2.1 Real-time Inference
+### ⚡ 5.2 Deployment
+#### 5.2.1 Real-time Inference
 
 | GPU | Resulotion | Memory(GB) | 1 GPU (s) | 4 GPUs (s) |
 |:---:|:---:|:---:|:---:|:---:|
@@ -173,7 +173,7 @@ Kairos models deliver SOTA performance across diverse benchmarks. In embodied sc
 
 *（results based on kairos-4B-robot 480p distillation）
 
-### 5.2.2 Benchmark for A800 GPU
+#### 5.2.2 Benchmark for A800 GPU
 
 
 | Model | Parameter | Memory (GB) | Complexity (PFlops) | 1 GPU (s) | 4 GPUs (s) |
