@@ -4,7 +4,7 @@ KAIROS_MODEL_DIR = 'models'
 text_encoder_path =  f'{KAIROS_MODEL_DIR}/Qwen_AWQ/'
 vae_path = f'{KAIROS_MODEL_DIR}/Wan2.1_VAE.pth'
 prompt_rewriter_path = f'{KAIROS_MODEL_DIR}/Qwen/Qwen3-VL-8B-Instruct/'
-pretrained_dit = '/data/wuxn/kairos-4b-480p-dmd.safetensors'
+pretrained_dit = f'{KAIROS_MODEL_DIR}/kairos-4b-480p-dmd.safetensors'
 
 tokenizer_path=None
 
