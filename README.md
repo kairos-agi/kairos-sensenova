@@ -42,17 +42,17 @@ Introducing the first Hybrid Linear Attention operator specifically for world mo
     </thead>
     <tbody>
         <tr>
-            <td style="text-align: center;"><video src="assets/physical-1.mp4" width="240" controls muted loop></video></td>
-            <td style="text-align: center;"><video src="assets/Cross-embody-1.mp4" width="240" controls muted loop></video></td>
-            <td style="text-align: center;" rowspan="3"><video src="assets/HPC.mov" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><video src="https://github.com/user-attachments/assets/37f39f59-51c0-4cc5-af65-bf30c2a26145" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><video src="https://github.com/user-attachments/assets/e67d3c86-8b00-4813-ab0f-15b375a59cc4" width="240" controls muted loop></video></td>
+            <td style="text-align: center;" rowspan="3"><video src="https://github.com/user-attachments/assets/b1cbd67b-d912-48bc-8062-51aa1afd3465" width="240" controls muted loop></video></td>
         </tr>
         <tr>
-            <td style="text-align: center;"><video src="assets/physical-2.mp4" width="240" controls muted loop></video></td>
-            <td style="text-align: center;"><video src="assets/Cross-embody-2.mov" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><video src="https://github.com/user-attachments/assets/98531018-8ab1-4a6d-8be2-63994dfc7dde" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><video src="https://github.com/user-attachments/assets/fdade592-4ade-4c90-b2c0-7877b95f6abe" width="240" controls muted loop></video></td>
         </tr>
         <tr>
-            <td style="text-align: center;"><video src="assets/physical-3.mp4" width="240" controls muted loop></video></td>
-            <td style="text-align: center;"><video src="assets/Cross-embody-3.mov" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><video src="https://github.com/user-attachments/assets/a9978820-f77c-46d2-8481-2b5bce2177ad" width="240" controls muted loop></video></td>
+            <td style="text-align: center;"><video src="https://github.com/user-attachments/assets/768e39de-ce38-4431-8395-e07ba6df7475" width="240" controls muted loop></video></td>
         </tr>
     </tbody>
 </table>
