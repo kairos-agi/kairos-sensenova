@@ -173,7 +173,6 @@ Kairos models deliver SOTA performance across diverse benchmarks. In embodied sc
 |:---:|:---:|:---:|:---:|:---:|
 | NV-A800 | 480P | 23.5 | 11.7 | 3.0 |
 | NV-RTX5090 | 480P | 13.9 | 11.4 | 5.7 |
-| MetaX-C500 | 480P | 22.9 | 18.8 | 4.7 |
 
 *（results based on kairos-4B-robot 480p distillation）
 
