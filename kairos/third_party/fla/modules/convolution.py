@@ -836,6 +836,7 @@ class ShortConvolution(nn.Conv1d):
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         tp_num_splits: int = 1,
+        tp_chunk_list: list | None = None, 
         tp_group = None,
         **kwargs,
     ):
@@ -853,8 +854,23 @@ class ShortConvolution(nn.Conv1d):
         self.hidden_size = hidden_size
         self.activation = None
         self.tp_num_splits = tp_num_splits
+        self.tp_chunk_list = tp_chunk_list
 
-        if self.tp_num_splits > 1:
+        if tp_chunk_list is not None and len(tp_chunk_list) > 0 and len(set(tp_chunk_list)) == 1:
+            self.use_unbalance_tp = False
+            self.use_balance_tp = True
+        else:
+            self.use_unbalance_tp = tp_chunk_list is not None
+            self.use_balance_tp = False
+
+        # self.use_balance_tp = self.tp_num_splits > 1 and tp_chunk_list is None
+        # self.use_unbalance_tp = tp_chunk_list is not None
+        assert not (self.use_balance_tp and self.use_unbalance_tp), "cannot use both balance tp and unbalance tp"
+        # assert self.tp_num_splits > 1 and tp_chunk_list is None, "tp_chunk_list should be None when tp_num_splits > 1"
+        # assert self.tp_num_splits <= 1 and tp_chunk_list is not None, "please do not give tp_num_splits when you want to set tp_chunk_list"
+
+        # if self.tp_num_splits > 1:
+        if self.use_balance_tp:
             # print(f"Parameters will be chunked! only for tensor parallel!")
             import torch.distributed as dist
             assert dist.is_initialized()
@@ -869,6 +885,33 @@ class ShortConvolution(nn.Conv1d):
                 dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tp_group)
                 return grad
             self.weight.register_hook(backward_hook)
+        elif self.use_unbalance_tp:
+            import torch.distributed as dist
+            assert dist.is_initialized()
+
+            def int_list_to_sum_list(int_list):
+                if not isinstance(int_list, list) or not all(isinstance(x, int) for x in int_list):
+                    raise ValueError("The input must be a list of integers only.")
+                sum_list = []
+                current_sum = 0
+                for num in int_list:
+                    current_sum += num
+                    sum_list.append(current_sum)
+                return sum_list
+
+            self.tp_chunk_sum_list = int_list_to_sum_list(self.tp_chunk_list)
+            self.tp_chunk_sum_list.insert(0,0)
+            self.tp_group = tp_group
+            self.tp_rank = dist.get_rank(tp_group)
+            self.tp_size = dist.get_world_size(tp_group)
+            assert hidden_size % self.tp_chunk_sum_list[-1] == 0
+            self.shard = hidden_size // self.tp_chunk_sum_list[-1]
+
+            def backward_hook(grad):
+                dist.all_reduce(grad, op=dist.ReduceOp.SUM, group=self.tp_group)
+                return grad
+            self.weight.register_hook(backward_hook)
+
 
         if activation is not None:
             assert activation in ['silu', 'swish'], f"Activation `{activation}` not supported yet."
@@ -976,9 +1019,12 @@ class ShortConvolution(nn.Conv1d):
             )
             self.backend = 'triton'
 
-        if self.tp_num_splits > 1:
+        if self.use_balance_tp:
             start = self.tp_rank * self.shard
             end = start + self.shard
+        elif self.use_unbalance_tp:
+            start = self.tp_chunk_sum_list[self.tp_rank] * self.shard
+            end = self.tp_chunk_sum_list[self.tp_rank + 1] * self.shard
         else:
             start = 0
             end = None
@@ -1009,9 +1055,12 @@ class ShortConvolution(nn.Conv1d):
         if output_final_state and cache is None:
             cache = x.new_zeros(N, D, W)
 
-        if self.tp_num_splits > 1:
+        if self.use_balance_tp:
             start = self.tp_rank * self.shard
             end = start + self.shard
+        elif self.use_unbalance_tp:
+            start = self.tp_chunk_sum_list[self.tp_rank] * self.shard
+            end = self.tp_chunk_sum_list[self.tp_rank + 1] * self.shard
         else:
             start = 0
             end = -1

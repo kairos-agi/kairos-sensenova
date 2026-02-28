@@ -409,17 +409,66 @@ class SelfAttention(nn.Module):
                 out = out[:, :-pad_len]
         return out
 
-def tensor_parallel_rms_norm(x: torch.Tensor, norm: "RMSNorm") -> torch.Tensor:
+def _prefix_sum(xs):
+    ps = [0]
+    s = 0
+    for v in xs:
+        s += int(v)
+        ps.append(s)
+    return ps
+
+def _build_plan(full_dim: int, tp_rank: int, tp_size: int, tp_chunk_list=None):
+    if tp_chunk_list is None:
+        if full_dim % tp_size != 0:
+            raise RuntimeError(f"full_dim({full_dim}) must be divisible by tp_size({tp_size}) in balanced mode")
+        local = full_dim // tp_size
+        start = tp_rank * local
+        end = start + local
+        return start, end, local
+
+    if len(tp_chunk_list) != tp_size:
+        raise RuntimeError(f"len(tp_chunk_list)={len(tp_chunk_list)} != tp_size={tp_size}")
+    if any(int(v) <= 0 for v in tp_chunk_list):
+        raise RuntimeError(f"tp_chunk_list must be positive ints, got {tp_chunk_list}")
+
+    total = sum(int(v) for v in tp_chunk_list)
+    chunk_dim = full_dim // total
+    ps = _prefix_sum(tp_chunk_list)
+    start = ps[tp_rank] * chunk_dim
+    end = ps[tp_rank + 1] * chunk_dim
+    return start, end, end - start
+
+def tensor_parallel_rms_norm(x, norm, tp_chunk_list):
     tp_rank = parallel_state.get_context_parallel_rank()
-    tp_size = parallel_state.get_context_parallel_world_size()
     tp_group = parallel_state.get_context_parallel_group()
-    src_dtype = x.dtype
-    weight = norm.weight.tensor_split(tp_size)[tp_rank].float()
+
+    # full dim from RMSNorm
+    full_dim = norm.weight.shape[0]
+    total_heads = sum(tp_chunk_list)
+
+    # head_dim 必须来自 full_dim / total_heads
+    assert full_dim % total_heads == 0, \
+        f"RMSNorm dim {full_dim} not divisible by total_heads {total_heads}"
+
+    head_dim = full_dim // total_heads
+    local_heads = tp_chunk_list[tp_rank]
+    local_dim = local_heads * head_dim
+
+    start = sum(tp_chunk_list[:tp_rank]) * head_dim
+    end = start + local_dim
+
+    assert x.shape[-1] == local_dim, \
+        f"RMSNorm input dim mismatch: x={x.shape[-1]}, expect {local_dim}"
+
+    weight = norm.weight[start:end]
+
     x_fp32 = x.float()
     variance = x_fp32.pow(2).mean(dim=-1, keepdim=True)
+
     dist.all_reduce(variance, op=dist.ReduceOp.AVG, group=tp_group)
-    output = x_fp32 * torch.rsqrt(variance + norm.eps) * weight
-    return output.to(dtype=src_dtype)
+
+    out = x_fp32 * torch.rsqrt(variance + norm.eps) * weight
+    return out.to(x.dtype)
 
 class SelfAttentionTP(nn.Module):
     def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3):
@@ -430,19 +479,26 @@ class SelfAttentionTP(nn.Module):
         self.tp_group = parallel_state.get_context_parallel_group()
         self.tp_size = parallel_state.get_context_parallel_world_size()
     
-        assert num_heads % self.tp_size == 0, "num_heads must be divisible by tp_size"
-        self.num_heads_local = num_heads // self.tp_size
+        # assert num_heads % self.tp_size == 0, "num_heads must be divisible by tp_size"
+
+        self.tp_chunk_list = self._build_tp_chunk_list(num_heads, self.tp_size)
+        self.num_heads_local = self.tp_chunk_list[
+            parallel_state.get_context_parallel_rank()
+        ]
+
+        # self.num_heads_local = num_heads // self.tp_size
         self.head_dim = dim // num_heads
+        assert dim % num_heads == 0, "dim must be divisible by num_heads"
         self.inner_dim = self.num_heads_local * self.head_dim  
 
         self.dilated_length = dilated_length
         self.window_size = window_size
 
-        self.q = ColumnParallelLinear(dim, dim, gather_output=False)
-        self.k = ColumnParallelLinear(dim, dim, gather_output=False)
-        self.v = ColumnParallelLinear(dim, dim, gather_output=False)
+        self.q = ColumnParallelLinear(dim, dim, gather_output=False, tp_chunk_list=self.tp_chunk_list)
+        self.k = ColumnParallelLinear(dim, dim, gather_output=False, tp_chunk_list=self.tp_chunk_list)
+        self.v = ColumnParallelLinear(dim, dim, gather_output=False, tp_chunk_list=self.tp_chunk_list)
     
-        self.o = RowParallelLinear(dim, dim)
+        self.o = RowParallelLinear(dim, dim, tp_chunk_list=self.tp_chunk_list)
 
         self.norm_q = FusedRMSNorm(dim, eps=eps)
         self.norm_k = FusedRMSNorm(dim, eps=eps)
@@ -452,8 +508,14 @@ class SelfAttentionTP(nn.Module):
         else:
             self.attn = AttentionModule(self.num_heads_local)
 
+    def _build_tp_chunk_list(self, num_heads, tp_size):
+        base = num_heads // tp_size
+        rem = num_heads % tp_size
+        return [base + (1 if r < rem else 0) for r in range(tp_size)]
+
     def extra_repr(self):
         return f'dilated_length={self.dilated_length}, window_size={self.window_size}, tp_size={self.tp_size}'
+
 
     def forward(self, x, f, freqs, L=1):
         dilated_length = self.dilated_length
@@ -461,8 +523,8 @@ class SelfAttentionTP(nn.Module):
         l_q = self.q(x)
         l_k = self.k(x)
 
-        q= tensor_parallel_rms_norm(l_q, self.norm_q)
-        k= tensor_parallel_rms_norm(l_k, self.norm_k)
+        q= tensor_parallel_rms_norm(l_q, self.norm_q, self.tp_chunk_list)
+        k= tensor_parallel_rms_norm(l_k, self.norm_k, self.tp_chunk_list)
 
         v = self.v(x)
     
@@ -495,7 +557,6 @@ class SelfAttentionTP(nn.Module):
             out = rearrange(out, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)
             if pad_len != 0:
                 out = out[:, :-pad_len]
-        
         return out
 
 class CrossAttention(nn.Module):
@@ -636,7 +697,7 @@ class DiTBlock(nn.Module):
             assert gateddeltanet_layer_idx >= 0
 
             # getaeddeltanet用tp并行
-            if self.use_tp_in_getaeddeltanet:
+            if self.use_tp_in_getaeddeltanet and world > 1:
                 self.gated_delta = GatedDeltaNetWithTP(
                     hidden_size=dim,
                     num_heads=num_heads,
