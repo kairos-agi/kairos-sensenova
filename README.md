@@ -5,203 +5,262 @@
 <p>
 
 <p align="center">
-    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/kairos-agi">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="">ModelScope</a>&nbsp&nbsp | &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
+    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/kairos-agi">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
 
 -----
-Hi, it’s **Kairos** here. 
+**Kairos 3.0** is grounded in physical laws as its cognitive foundation, establishing a unified cross-embodiment world modeling framework. Featuring a 4B-parameter architecture with a custom hybrid linear attention operator, it unifies multimodal understanding, generation, and action prediction for real-time edge deployment. By achieving physics-level deep cognition and low-latency inference, it empowers high-precision action prediction and HD generation for both physical and digital embodied AI applications.
 
-**Kairos 3.0** is an efficient **world foundation model** designed to learn the **dynamics, causality, and physical laws of the real world** by rendering them into long-horizon videos. This release marks the **first open-sourced version of Kairos**, with a strong emphasis on **scalable temporal modeling** and **physically consistent video synthesis**.
+## 🎯 1. Motivation
+While Scaling Laws are emerging in Embodied AI, their efficiency is severely bottlenecked by data heterogeneity, poor long-horizon reasoning, and edge-side compute constraints. These hurdles make scaling alone insufficient for reliable interaction, hindering the path to industrial-grade General Embodied Intelligence.
 
-Key highlights of Kairos 3.0 include:
+## 🌟  2. Kairos 3.0  Framework
 
-- ⚡ **Temporally-Linear DiT Architecture**: Kairos 3.0 introduces a LinearDiT backbone that scales **linearly** with video length. By replacing quadratic temporal attention with a carefully designed hybrid of local and linear attentions, the model efficiently supports long video sequences while preserving temporal coherence.
+<div align="center">
+<table align="center">
+    <tr>
+        <td align="center"><img src="assets/1.png" width="320"/></td>
+        <td align="center"><img src="assets/2.png" width="320"/></td>
+        <td align="center"><img src="assets/3.png" width="320"/></td>
+    </tr>
+</table>
+</div>
 
+### 🌍 Unified World Modeling Framework
+Kairos 3.0 uses fundamental physical and causal laws as its cognitive foundation. By integrating real-robot interaction, structured human behavior, and Chain-of-Thought (CoT) data, it breaks heterogeneity barriers and boosts data reuse efficiency. This shifts the paradigm from simple imitation to physics-level deep understanding, enabling robust generalization and long-horizon reasoning at a more efficient model scale.
 
-- 🎯 **Physically Grounded and Causally Consistent Generation**: The DiT architecture is explicitly structured to respect temporal causality. Through gated linear attention, Kairos 3.0 propagates global state information across time, enabling stable object permanence, coherent interactions, and physically plausible event evolution.
+### 🔗 Integrated Multimodal Architecture
+Designed as a unified end-to-end pipeline for Understanding, Generating, and Predicting the world. Leveraging physical laws and causal CoT, the model doesn't just "see" but "understands" the underlying logic of environments. This allows for precise decomposition of complex tasks, seamless planning, and reliable execution in a single intelligence loop.
 
+### ⚡ Linear-Time Attention for World Models
+Introducing the first Hybrid Linear Attention operator specifically for world models. By reducing temporal complexity from $O(n^2)$ to $O(n)$, Kairos 3.0 slashes VRAM and compute overhead while maintaining long-sequence capabilities. This enables the industry’s first real-time on-robot inference for an open-source world model.
 
--  🔄 **Complex and Long-Range Motion Modeling**: By interleaving sliding-window, dilated, and global linear attentions, Kairos 3.0 captures motion across multiple temporal scales—from fine-grained local dynamics to long-range dependencies spanning several seconds. This design enables the generation of complex, multi-stage motions with strong long-term consistency.
-
-- 📊 **Massive World Data**: Kairos 3.0 is trained on hundreds of millions of video clips spanning diverse domains and data sources, such as **human-centric manipulation** and *physical phenomenon*. We further design a high-quality data curation pipeline tailored for world modeling, emphasizing informative, physically meaningful, and temporally rich training samples.
-
-## 🎬 Video Results
-
-| TI2V | T2V | I2V |
-|:----:|:---:|:---:|
-| <img src="assets/videos/kairos_demo_ti2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_t2v.gif" width="240"/> | <img src="assets/videos/kairos_demo_i2v.gif" width="240"/> |
-
-
-<p align="center">
-<em style="font-family: Arial, sans-serif; font-size: 16px; font-style: italic; "> Broad river surges over grand waterfall. </em>
-</p>
-
-## 🔥 Latest News
-* Jan 19, 2026: The 480p pretrained model of Kairos-sensenova-4B is officially released. The 720p pretrained and post-trained models will follow sequentially.  
-* Dec 18, 2025: 👋 We have released the inference code of Kairos-sensenova-4B model. 
-
-## 📑 Open-source Plan
-- [x] Inference code
-- [x] Checkpoints of the pretrained and post-trained models
-- [ ] Checkpoints of the distilled models
-- [ ] Technical report
-
-## 🪩 Model Architecture
-
-### Overall Architecture
-
-<p align="center">
-    <img src="assets/framework_kairos.png" width="1000"/>
-<p>
-
-Kairos 3.0 is built upon a diffusion-based world modeling framework that integrates a high-compression video VAE, a multimodal (VLM-based) conditioning encoder, and a temporally scalable DiT backbone. The overall design emphasizes **long-horizon temporal modeling**, **physical consistency**, and **computational efficiency**.
-
-- **Video VAE**: Kairos 3.0 adopts the WAN2.1 VAE, which provides strong reconstruction fidelity under aggressive compression. Specifically, a video of shape `3 × T × H × W` is encoded into a latent representation of size `16 × T/4 × H/8 × W/8`, corresponding to a compression ratio of 48×.
-
-- **VLM-based Conditioning Encoder**: Text prompts are embedded using a vision-language model (VLM), enabling semantically rich conditioning. 
-
-- **LinearDiT Backbone**:  
-  At the core of Kairos 3.0 is a temporally-linear DiT architecture that replaces standard quadratic temporal attention with a hybrid design composed of linear- and local-attention mechanisms. This enables efficient modeling of long video sequences while maintaining strong temporal coherence and causal reasoning ability.
-
----
-
-### Hybrid Linear Attention
-
-<p align="center">
-    <img src="assets/architecture_kairos.png" width="1000"/>
-<p>
-
-To achieve linear temporal complexity without sacrificing global consistency, Kairos 3.0 interleaves multiple complementary attention mechanisms. The LinearDiT backbone is organized into `M = 8` groups of hybrid blocks, where each group contains:
-- `2 ×` Sliding Window Attention (SWA) blocks  
-- `1 ×` Dilated Sliding Window Attention (DSWA) block  
-- `1 ×` Gated Linear Attention (GLA) block  
-
-This hierarchical composition balances **local motion modeling**, **mid-range temporal interaction**, and **global causal dependency capture**.
-
-- **Sliding Window Attention (SWA)**: SWA focuses on fine-grained local temporal dynamics. Each SWA block attends to a window of `6 × L` tokens, where `L` denotes the number of spatial tokens per frame. This design is effective for modeling short-term motion continuity and local physical interactions.
-
-- **Dilated Sliding Window Attention (DSWA)**: DSWA extends the temporal receptive field by introducing dilation. It uses the same window size (`6 × L`) but with a dilation factor of `6`, corresponding to one second at 24 FPS. This allows the model to capture longer-range temporal dependencies while maintaining linear complexity.
-
-- **Gated Linear Attention (GLA)**: To model global temporal causality, Kairos 3.0 employs GatedDeltaNet, a modern gated linear attention variant. GLA enables information propagation across the entire video sequence in linear time, supporting long-horizon reasoning, object permanence, and physically consistent event evolution.
-
-
-## Model Zoo
-
-| Models | Description |
-|--------------------| -------------|
-| <a href="https://huggingface.co/kairos-agi/kairos-sensenova-common">Kairos-sensenova-4B-pretrained-480p</a>     | 480p pretrained model with 16fps |
-| Kairos-sensenova-4B-pretrained-720p     | 720p pretrained model with 24fps |
-| Kairos-sensenova-4B-distillation-720p     | 720p distillation model |
-| Kairos-sensenova-4B-posttrained     | To be released |
-
-## Run Kairos 3.0
-
-### Clone the repo:
-```bash
-git clone https://github.com/kairos-agi/kairos-sensenova.git
-cd kairos-sensenova
-```
-
-### Environment Setup
-
-Prepare your runtime environment by following the instructions in  
-[`docker/DOCKER.md`](docker/DOCKER.md).
-
-> **Note**  
-> The provided Docker environment is built and validated on Ampere NVIDIA GPUs with large memory capacity (e.g., A100/A800-class architectures).  
-> A GPU with approximately **80 GB VRAM** is recommended, as video generation workloads are memory intensive.
-
-
-### Run Inference
-Run Inference by following the instructions in  
-[`docs/QUICKSTART.md`](docs/QUICKSTART.md).
-
-## 📈 Inference Performance
-
-### Inference Optimization Strategy
-
-We enhance the inference computational efficiency of the Kairos 3.0 model on various mainstream architecture chips(Ampere/Hopper/Blackwell) via a multi-faceted optimization approach, encompassing offloading optimization, quantization, scheduling policies, parallelization, and operator fusion strategies. To fulfill practical application scenarios, detailed optimization methodologies and performance evaluations are elaborated in the sections below.
-
-**Performance Benchmark of Kairos 3.0**
-
-*(Time (s) / Peak Memory (GB))*
-
+## ✨ 3. Demos
 <div align="center">
 <table style="text-align: center; margin: 0 auto;">
     <thead>
         <tr>
-            <th rowspan="2" style="text-align: center;">Company</th>
-            <th rowspan="2" style="text-align: center;">GPU</th>
-            <th rowspan="2" style="text-align: center;">Model</th>
-            <th rowspan="2" style="text-align: center;">Resolution</th>
-            <th rowspan="2" style="text-align: center;">Precision</th>
-            <th rowspan="2" style="text-align: center;">Memory(GB)</th>
-            <th colspan="3" style="text-align: center;">Number of GPUs(s)</th>
-        </tr>
-        <tr>
-            <th style="text-align: center;">1</th>
-            <th style="text-align: center;">4</th>
+            <th style="text-align: center;">Physical–causal consistency</th>
+            <th style="text-align: center;">Cross-embodiment generalization</th>
+            <th style="text-align: center;">High-efficiency inference</th>
         </tr>
     </thead>
     <tbody>
-        <tr>
-            <td style="text-align: center;">Nvidia</td>
-            <td style="text-align: center;">A800</td>
-            <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">480P</td>
-            <td style="text-align: center;">int4+int8</td>
-            <td style="text-align: center;">23.5</td>
-            <td style="text-align: center;">11.7</td>
-            <td style="text-align: center;">3.0</td>
+            <tr>
+            <td style="text-align: center;"><img src="assets/videos/physical-1.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/cross-1.gif" width="240"/></td>
+            <td style="text-align: center;" rowspan="3"><img src="assets/videos/hpc.gif" width="240"/></td>
         </tr>
         <tr>
-            <td style="text-align: center;">Nvidia</td>
-            <td style="text-align: center;">5090</td>
-            <td style="text-align: center;">Kairos-4B TI2V</td>
-            <td style="text-align: center;">480P</td>
-            <td style="text-align: center;">int4+bf16</td>
-            <td style="text-align: center;">13.9</td>
-            <td style="text-align: center;">11.4</td>
-            <td style="text-align: center;">5.7</td>
+            <td style="text-align: center;"><img src="assets/videos/physical-2.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/cross-2.gif" width="240"/></td>
+        </tr>
+        <tr>
+            <td style="text-align: center;"><img src="assets/videos/physical-3.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/cross-3.gif" width="240"/></td>
         </tr>
     </tbody>
 </table>
 </div>
 
-### Optimization Measures
-- **TeaCache Scheduling**: reuse cached intermediate states across diffusion steps to cut redundant computation and improve stability.
-- **SP/TP Parallelism**: sequence/tensor parallel execution to scale throughput at higher batch sizes and longer sequences.
-- **CPU OffLoad**: offload selected weights/activations to host memory to fit larger models on limited VRAM.
-- **int4（W4A16）VLM**: INT4 Quantization for Vision-Language Models (VLMs)  This balances model size reduction with retention of activation precision, which can be crucial for tasks involving visual and textual data.
-- **Sage Attention**: SageAttention is an efficient 8-bit quantization method specifically designed to accelerate the core attention mechanism in Transformer models without requiring model retraining. It addresses the computational bottleneck of standard attention, which has a complexity of O(N²), by implementing INT8 quantization for the Query (Q) and Key (K) matrices.
-- **Torch.compile**: It simplifies the process of accelerating neural network training and inference by automatically applying graph optimizations, kernel fusion, and hardware-specific optimizations.
+### 🧠 Physical–causal consistency
+Kairos leverages causal CoT and physical laws to transform multimodal inputs into deep task logic. It enables autonomous planning and feasibility analysis, shifting the system from "executing commands" to "understanding intent" for real-world robotic actions.
+### 🎨 Cross-embodiment generalization
+Unified Cross-Embodied Generation: A single "brain" that generalizes across single-arm, dual-arm, and dexterous-hand platforms. Kairos enables shared, transferable world knowledge with maximal adaptability. Broad Hardware Support: Native compatibility with Agibot G1, Unitree G1, and Songling PIPER, significantly slashing development costs through zero-shot multi-task generalization.
+### 🔮 High-efficiency inference
+Real-time Edge Performance: Industry-leading inference speed with ultra-low resource consumption. Optimized for low-latency, high-reliability deployment across single or multi-GPU embodied systems.
 
-### Performance Benchmarks
-The bar charts below illustrate relative latency improvements across optimization stages. Replace the placeholder values with your official measurements.
+## 📦 4. Model Zoo
+| Model Version | Resolution | Use cases | Highlights |
+|:---:|:---:|:---:|:---:|
+| [kairos-4B 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/common/kairos-common-4B-480P-16fps.safetensors) | 480P | 480p general pretrained model | 480p pretrained model for downstream fine-tuning. |
+| [kairos-4B-robot 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/robot/kairos-robot-4B-480P-16fps.safetensors) | 480P | Robot manipulation & real-world closed-loop control | Specialized for embodied AI; leading accuracy on PAI-Bench |
+| [kairos-4B-robot 480p distillation](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/robot/kairos-robot-4B-480P-16fps-distilled.safetensors) | 480P | On-robot Integration、Edge Computing、Low-power Efficiency | Ultra-lightweight via distillation; enables real-time inference on embedded/edge devices. |
+| [kairos-4B 720p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/common/kairos-common-4B-720P-16fps.safetensors) | 720P | HD visual generation & complex physical reasoning | Supports 720P HD output with enhanced fine-grained detail capture. |
 
-**A100/A800: Optimization Process (Latency in seconds)**
+## 📈5. Evaluation 
+### 🎯 5.1 Accuracy Benchmarks
+
+<div align="center">
+<table align="center">
+    <thead>
+        <tr>
+            <th align="center">Domain</th>
+            <th align="center">Benchmarks</th>
+            <th align="center">Kairos-Robot</th>
+            <th align="center">Cosmos 2.5-2B*</th>
+            <th align="center">Wan 2.2-5B*</th>
+            <th align="center">Cosmos 2.5-14B*</th>
+            <th align="center">Lingbot*</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td align="center" rowspan="3">Robot</td>
+            <td align="center">PAI-Bench-robot</td>
+            <td align="center">80.03</td>
+            <td align="center">78.3</td>
+            <td align="center">78.6</td>
+            <td align="center">79.4</td>
+            <td align="center">79.96</td>
+        </tr>
+        <tr>
+            <td align="center">WorldModelBench-robot TI2V</td>
+            <td align="center">9.08</td>
+            <td align="center">9.04</td>
+            <td align="center">8.52</td>
+            <td align="center">8.94</td>
+            <td align="center">9.04</td>
+        </tr>
+        <tr>
+            <td align="center">DreamGen Bench(PA/IF)</td>
+            <td align="center">0.529/0.609</td>
+            <td align="center">0.418/0.568</td>
+            <td align="center">0.314/0.543</td>
+            <td align="center">0.495/0.478</td>
+            <td align="center">0.466/0.569</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+
+<div align="center">
+<table align="center">
+    <thead>
+        <tr>
+            <th align="center">Domain</th>
+            <th align="center">Benchmarks</th>
+            <th align="center">Kairos 3.0-4B</th>
+            <th align="center">Cosmos 2.5-2B*</th>
+            <th align="center">Wan 2.2-5B*</th>
+            <th align="center">Cosmos 2.5-14B</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td align="center" rowspan="3">General</td>
+            <td align="center">PAI-Bench</td>
+            <td align="center">80.84</td>
+            <td align="center">81.0</td>
+            <td align="center">80.4</td>
+            <td align="center">81.0</td>
+        </tr>
+        <tr>
+            <td align="center">WorldModelBench</td>
+            <td align="center">8.94</td>
+            <td align="center">8.86</td>
+            <td align="center">8.70</td>
+            <td align="center">9.02*</td>
+        </tr>
+        <tr>
+            <td align="center">VideoPHY</td>
+            <td align="center">45.55</td>
+            <td align="center">44.64</td>
+            <td align="center">38.85</td>
+            <td align="center">-</td>
+        </tr>
+    </tbody>
+</table>
+</div>
+
+*（results reproduced from open-source model baselines, "robot" refers to the corresponding results of the robot subset.）
+
+Kairos models deliver SOTA performance across diverse benchmarks. In embodied scenarios, Kairos-Robot leads PAI-Bench with a score of 80.08 and dominates generalization tasks in DreamGen Bench. For general world modeling, Kairos 3.0-4B matches or exceeds larger-scale models on WorldModelBench and VideoPHY, achieving a perfect balance of precision and efficiency at a compact 4B scale.
+
+### ⚡ 5.2 Deployment
+#### 5.2.1 Real-time Inference
+
+| GPU | Resulotion | Memory(GB) | 1 GPU (s) | 4 GPUs (s) |
+|:---:|:---:|:---:|:---:|:---:|
+| NV-A800 | 480P | 23.5 | 11.7 | 3.0 |
+| NV-RTX5090 | 480P | 13.9 | 11.4 | 5.7 |
+
+*（results based on kairos-4B-robot 480p distillation）
+
+#### 5.2.2 Benchmark for A800 GPU
 
 
+| Model | Parameter | Memory (GB) | Complexity (PFlops) | 1 GPU (s) | 4 GPUs (s) |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| Kairos 3.0 | 4B | 23.5 | 2.3 | 43.3 | 9.5 |
+| Cosmos 2.5 | 14B | 70.2 | 156.5 (~70x) | 2526.0 | 687.2 |
+| Wan 2.2 | 5B | 23.4 | 16.6 (~7x) | 201.0 | 85.0 |
+| Lingbot | 28B | 46.1 | 347.4 (~160x) | 5525.0 | 1436.0 |
 
-**RTX 5090: Optimization Process (Latency in seconds)**
+*（evaluation setting：TI2V mode with 720P/5s）
+
+## 🔧 6. Quick Start
+### 6.1 Environment Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/kairos-agi/kairos-sensenova.git
+cd kairos-sensenova
+
+# You can set up the environment in two ways:
+# 1) Build container from the Docker image
+# 2) Build the environment from requirements with conda or venv
+
+# 1) Docker image:
+# Pull the Docker image
+echo ghp_xxxxxxxxxxxxxxxxx | docker login ghcr.io -u username --password-stdin
+docker pull ghcr.io/kairos-agi/kairos-sensenova:v0.0.1
+
+# Create a container using Docker
+docker run --rm -it \
+  --gpus all \
+  -v $(pwd):/workspace \
+  ghcr.io/kairos-agi/kairos-sensenova:v0.0.1 \
+  bash
 
 
-
-
-
-## Citation
-If you find our work helpful, please cite us.
-
+# 2) requirments
+# build a python environment with python>=3.10 && torch>=2.6 && cuda>=12.6
+# install requirements
+pip install -r requirements.txt
 ```
-@article{kairos,}
+
+### 6.2 Run Inference
+```bash
+# Step1: Fetch the Model
+pip install -U huggingface_hub 
+mkdir -p models/Kairos models/Qwen models/Wan2.1-T2V-14B
+
+# Download kairos model
+hf download kairos-agi/kairos-sensenova-common \
+  --local-dir models/Kairos \
+  --include "*.safetensors"
+  
+# Download Qwen2.5-VL for Text-Encoder
+hf download Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
+  --local-dir models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
+  --include "*.safetensors"  
+  
+# Dowload Wan2.1-VAE for VAE-Encoder/Decoder
+hf download Wan-AI/Wan2.1-T2V-14B \
+  --local-dir models/Wan2.1-T2V-14B \
+  --include "Wan2.1_VAE.pth"  
+
+# Step2: Run the examples
+# Text2Video
+bash examples/inference.sh examples/example_t2v.json
+# Text&FirstImage2Video
+bash examples/inference.sh examples/example_ti2v.json
+# FirstImage2Video
+bash examples/inference.sh examples/example_i2v.json
 ```
 
-## License Agreement
-This project is licensed under the Apache License, Version 2.0.  You may use, modify, and distribute this software in compliance with the License.  See the [LICENSE](LICENSE) file for details. Besides, this project will download and install additional third-party open source software projects. Review the license terms of these open source projects before use.
+## 👥 7. About Us
+Developed and maintained by the Kairos Team. We specialize in Embodied Intelligence and World Model research, with a mission to build Artificial General Intelligence (AGI) that truly understands the physical world. Our goal is to accelerate the industrialization of embodied technologies and reshape the global landscape of AI competition.
+## 📄 8. License
+Kairos is open-sourced under the Apache License 2.0. Feel free to use, modify, and build commercial products on top of it. Check the [LICENSE](LICENSE)  file for the full text.
 
-
-## Acknowledgements
+## 9. Acknowledgements
 
 We would like to thank the contributors to [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) and [HuggingFace](https://huggingface.co) for their open-source research contributions.
+
+---
+⭐ Star us on GitHub if you find [Kairos 3.0](https://github.com/kairos-agi/kairos-sensenova) helpful!
+
 
 
 
