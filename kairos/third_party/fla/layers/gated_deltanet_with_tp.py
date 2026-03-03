@@ -640,11 +640,11 @@ class GatedDeltaNet(nn.Module):
             if world_size > 1:
                 # determine gating sequence layout (g_seq). If g_seq was
                 # produced earlier, reuse it; otherwise build from g_full.
-                if 'g_seq' in locals():
-                    g_seq_final = g_seq
-                else:
+                if g_seq is None:
                     g_full_4 = rearrange(g_full, 'b t (h d) -> b t h d', d=self.head_v_dim)
                     g_seq_final = _all2all_head_to_seq(g_full_4, self.tp_group, self.tp_chunk_list)
+                else:
+                    g_seq_final = g_seq
                 # choose input for norm: prefer o_seq (head->seq result) when available
                 o_in = o_seq if 'o_seq' in locals() else o
                 o_seq_norm = self.o_norm(o_in, g_seq_final, tp_group=self.tp_group)
