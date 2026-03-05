@@ -1015,7 +1015,7 @@ __global__ void qk_int_sv_f16_attn_kernel_window_size(int8_t *__restrict__ Q, in
   }
   
   // second last iter, apply causal mask
-  if (num_iterations  > 1)
+  if (iter_max  > 1)
   {
     // ensure K is ready
     cp_async::wait_group<1>();

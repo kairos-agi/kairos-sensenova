@@ -122,10 +122,12 @@ def blockscaled_fp4_attn(qlist: Tuple,
                          KL: int,
                          is_causal: bool = False, 
                          per_block_mean: bool = True,
-                         is_bf16: bool = True
+                         is_bf16: bool = True,
+                         window_size_left = -1,
+                         window_size_right = -1
                         ):
     softmax_scale = (qlist[0].shape[-1] * 2) ** (-0.5)
-    return fp4attn_cuda.fwd(qlist[0], klist[0], vlist[0], qlist[1], klist[1], vlist[1], delta_s, KL, None, softmax_scale, is_causal, per_block_mean, is_bf16)
+    return fp4attn_cuda.fwd(qlist[0], klist[0], vlist[0], qlist[1], klist[1], vlist[1], delta_s, KL, None, softmax_scale, is_causal, per_block_mean, is_bf16, window_size_left, window_size_right)
 
 
 def sageattn3_blackwell(q, k, v, attn_mask = None, is_causal = False, per_block_mean = True, **kwargs):
@@ -148,5 +150,30 @@ def sageattn3_blackwell(q, k, v, attn_mask = None, is_causal = False, per_block_
     is_causal,
     per_block_mean,
     is_bf16
+    )[0][:, :, :QL, :].contiguous()
+    return o_fp4
+
+def sageattn3_with_window(q, k, v, attn_mask = None, is_causal = False, window_size=(-1, -1), per_block_mean = True, **kwargs):
+    if q.size(-1) >= 256:
+        print(f"Unsupported Headdim {q.size(-1)}")
+        return sdpa(q, k, v, is_causal = is_causal)
+    QL = q.size(2)
+    KL = k.size(2)
+    is_bf16 = q.dtype == torch.bfloat16
+    q, k, v, delta_s = preprocess_qkv(q, k, v, per_block_mean)
+    qlist_from_cuda = scale_and_quant_fp4(q)
+    klist_from_cuda = scale_and_quant_fp4_permute(k)
+    vlist_from_cuda = scale_and_quant_fp4_transpose(v)
+    o_fp4 = blockscaled_fp4_attn(
+    qlist_from_cuda,
+    klist_from_cuda, 
+    vlist_from_cuda,
+    delta_s,
+    KL,
+    is_causal,
+    per_block_mean,
+    is_bf16,
+    window_size[0],
+    window_size[1]
     )[0][:, :, :QL, :].contiguous()
     return o_fp4

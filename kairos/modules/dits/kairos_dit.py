@@ -31,9 +31,10 @@ if not IS_CUDA:
 
 from kairos.modules.utils import FLAGS_KAIROS_CUDA_SM
 
-if FLAGS_KAIROS_CUDA_SM == 80:
+SUPPORTED_ARCHS = {80, 89, 120, 121}
+if FLAGS_KAIROS_CUDA_SM in SUPPORTED_ARCHS:
     try:
-        from sageattention import sag_attention_with_window
+        from sageattention import sag_attention_with_window,sageattn_qk_int8_pv_fp16_cuda_with_window
         SAGE_ATTN_AVAILABLE = True
     except ModuleNotFoundError:
         SAGE_ATTN_AVAILABLE = False
@@ -236,7 +237,9 @@ def flash_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, num_heads
 
 
 def modulate(x: torch.Tensor, shift: torch.Tensor, scale: torch.Tensor):
-    return (x * (1 + scale) + shift)
+    x.mul_(1 + scale)
+    x.add_(shift)
+    return x
 
 
 def sinusoidal_embedding_1d(dim, position):
@@ -265,7 +268,7 @@ def precompute_freqs_cis(dim: int, end: int = 1024, theta: float = 10000.0):
 
 def rope_apply(x, freqs, num_heads):
     x = rearrange(x, "b s (n d) -> b s n d", n=num_heads)
-    x_out = torch.view_as_complex(x.to(torch.float64).reshape(
+    x_out = torch.view_as_complex(x.to(torch.float16).reshape(
         x.shape[0], x.shape[1], x.shape[2], -1, 2))
     x_out = torch.view_as_real(x_out * freqs).flatten(2)
     return x_out.to(x.dtype)
@@ -274,7 +277,7 @@ def rope_apply_for3d(x, num_frames, freqs, num_heads):
     B, L, D = x.shape
     x = rearrange(x, "b s (n d) -> b s n d", n=num_heads)
 
-    x_out = torch.view_as_complex(x.to(torch.float64).reshape(
+    x_out = torch.view_as_complex(x.to(torch.float16).reshape(
         x.shape[0], x.shape[1], x.shape[2], -1, 2))
     x_out = torch.view_as_real(x_out * freqs).flatten(2)
 
@@ -312,6 +315,11 @@ class SagAttentionModule(nn.Module):
     def __init__(self, num_heads):
         super().__init__()
         self.num_heads = num_heads
+        self.pv_accum_dtype = "fp16"
+        self.smooth_v=True
+        if FLAGS_KAIROS_CUDA_SM in [89, 120, 121]:
+            self.pv_accum_dtype = "fp32+fp16"
+            self.smooth_v = True
         
     def forward(self, q, k, v, attn_mask=None, window_size=(-1, -1)):
         b, s, _ = q.shape
@@ -322,7 +330,7 @@ class SagAttentionModule(nn.Module):
         q = q.view(b, s, n, d).transpose(1, 2)
         k = k.view(b, s, n, d).transpose(1, 2)
         v = v.view(b, s, n, d).transpose(1, 2)
-        x = sag_attention_with_window(q, k, v,window_size=window_size,qk_quant_gran="per_warp", pv_accum_dtype="fp16",smooth_v=True)
+        x = sag_attention_with_window(q, k, v,window_size=window_size,qk_quant_gran="per_warp", pv_accum_dtype=self.pv_accum_dtype,smooth_v=self.smooth_v)
         x = x.transpose(1, 2).contiguous().view(b, s, n * d)
         return x
 
@@ -718,7 +726,7 @@ class DiTBlock(nn.Module):
                                                 )
         else:
             assert gateddeltanet_layer_idx == -1
-            if self.use_tp_in_self_attn:
+            if self.use_tp_in_self_attn and world > 1:
                 # self_attention用tp并行
                 if attend_k0:
                     raise NotImplementedError('SelfAttentionTP not support attend_k0 yet!!!')
@@ -750,13 +758,23 @@ class DiTBlock(nn.Module):
         chunk_dim = 2 if has_seq else 1
 
         # scale & gate
-        scale_msa, shift_msa, gate_msa, scale_mlp, shift_mlp, gate_mlp = (
-            self.modulation.to(dtype=t_mod.dtype, device=t_mod.device) + t_mod).chunk(6, dim=chunk_dim)
-        if has_seq:
-            scale_msa, shift_msa, gate_msa, scale_mlp, shift_mlp, gate_mlp = (
-                scale_msa.squeeze(2), shift_msa.squeeze(2), gate_msa.squeeze(2),
-                scale_mlp.squeeze(2), shift_mlp.squeeze(2), gate_mlp.squeeze(2),
-            )
+        mod_dtype = self.modulation.to(dtype=t_mod.dtype, device=t_mod.device)
+        t_mod_chunks = t_mod.chunk(6, dim=chunk_dim)
+        mod_chunks = mod_dtype.chunk(6, dim=1)
+
+        # for delayed computation
+        def get_mod_chunk(idx, sp_slice=None):
+            t_c = t_mod_chunks[idx]
+            m_c = mod_chunks[idx]
+
+            if has_seq:
+                t_c = t_c.squeeze(2)
+                m_c = m_c.squeeze(1)
+                if sp_slice is not None:
+                    start_idx, end_idx = sp_slice
+                    t_c = t_c[:, start_idx:end_idx, :]
+
+            return t_c + m_c
         
         use_seq_parallel = self.use_seq_parallel
         if (not self.is_first_block) and use_seq_parallel:
@@ -764,10 +782,14 @@ class DiTBlock(nn.Module):
         else:
             full_x = x
 
+        scale_msa = get_mod_chunk(0)
+        shift_msa = get_mod_chunk(1)
+
         # self-attention
         input_x = modulate(self.self_attn_norm(full_x), shift_msa, scale_msa)
+        del scale_msa, shift_msa
         if self.use_linear_attn:
-            chunk_size = 40768 
+            chunk_size = 40768 // 7
             if input_x.shape[1] > chunk_size:
                 cache = fla_Cahce.from_legacy_cache()
                 outputs = []
@@ -787,6 +809,7 @@ class DiTBlock(nn.Module):
                 attn_out, _, _ = self.gated_delta(input_x)
         else:
             attn_out = self.self_attn(input_x, f, freqs, L=L)
+        gate_msa = get_mod_chunk(2)
         full_x = self.gate(full_x, gate_msa, attn_out)
 
         if use_seq_parallel:
@@ -794,32 +817,26 @@ class DiTBlock(nn.Module):
         else:
             distributed_x = full_x
 
+        sp_slice_args = None
         if use_seq_parallel:
             start_idx = self.context_group_rank * distributed_x.shape[1]
             end_idx = (self.context_group_rank + 1) * distributed_x.shape[1]
+            sp_slice_args = (start_idx, end_idx)
 
         # cross-attention
-        distributed_input_x = self.cross_attn_norm(distributed_x)
+        attn_out = self.cross_attn(self.cross_attn_norm(distributed_x), context, attn_mask=context_mask)
+        distributed_x.add_(attn_out)
+        del attn_out
 
-        attn_out = self.cross_attn(distributed_input_x, context, attn_mask=context_mask)
-        distributed_x = distributed_x + attn_out
+        shift = get_mod_chunk(4, sp_slice=has_seq and sp_slice_args or None)
+        scale = get_mod_chunk(3, sp_slice=has_seq and sp_slice_args or None)
+        gate  = get_mod_chunk(5, sp_slice=has_seq and sp_slice_args or None)
 
-        if len(t_mod.shape) == 4 and use_seq_parallel:
-            # t_mod: [1,6944 * N, 6,2560]
-            # distributed_x: [1,6944,2560]
-            # shift_mlp & shift_mlp: [1,6944 * N,2560]
-            distributed_input_x = modulate(self.ffn_norm(distributed_x), shift_mlp[:, start_idx:end_idx,:], scale_mlp[:, start_idx:end_idx,:])
-        else:
-            # t_mod: [1,6,2560]
-            # distributed_x: [1,6944,2560]
-            # shift_mlp & shift_mlp: [1, 1 ,2560]
-            distributed_input_x = modulate(self.ffn_norm(distributed_x), shift_mlp, scale_mlp)
-
+        distributed_input_x = modulate(self.ffn_norm(distributed_x), shift, scale)
         distributed_ffn_out = self.ffn(distributed_input_x)
-        if len(t_mod.shape) == 4 and use_seq_parallel:
-            distributed_x = self.gate(distributed_x, gate_mlp[:, start_idx:end_idx,:], distributed_ffn_out)
-        else:
-            distributed_x = self.gate(distributed_x, gate_mlp, distributed_ffn_out)
+        del distributed_input_x
+        distributed_x = self.gate(distributed_x, gate, distributed_ffn_out)
+        del shift, scale, gate
 
         if self.is_last_block and use_seq_parallel:
             full_x = _gather_input_sp(distributed_x, self.context_group)
