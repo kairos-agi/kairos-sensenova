@@ -213,7 +213,9 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x (head_size
         const float softmax_scale,
         bool is_causal, 
         bool per_block_mean,
-        bool is_bf16
+        bool is_bf16,
+        int window_size_left,
+        int window_size_right
     ) {
 
     auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -285,6 +287,9 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x (head_size
 
     auto softmax_lse = torch::empty({batch_size, num_heads, seqlen_q}, opts.dtype(at::kFloat));
     at::Tensor p;
+    if (window_size_left >= seqlen_k) { window_size_left = -1; }
+    if (window_size_right >= seqlen_k) { window_size_right = -1; }
+    if (is_causal) { window_size_right = 0; }
 
     Flash_fwd_params params;
     set_params_fprop(params,
@@ -302,8 +307,8 @@ mha_fwd(at::Tensor &q,         // batch_size x seqlen_q x num_heads x (head_size
                      softmax_lse.data_ptr(),
                      /*p_dropout=*/0.f,
                      softmax_scale,
-                     /*window_size_left=*/-1,
-                     /*window_size_right=*/is_causal ? 0 : -1,
+                     window_size_left,
+                     window_size_right,
                      per_block_mean,
                      is_bf16
                     );

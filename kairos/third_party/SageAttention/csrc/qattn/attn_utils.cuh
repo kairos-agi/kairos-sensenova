@@ -168,6 +168,33 @@ __device__ __forceinline__ void load_fp8_V_global_to_share(int8_t **lane_ptr, ui
   *lane_ptr += CTA; // ! prevent underflow 
   *lane_ptr -= (smem_iters_col * global_to_shared_copy_lines_per_warp_per_iter) * gmem_stride;
 }
+template <uint32_t global_to_shared_line_lanes, uint32_t global_to_shared_copy_lines_per_warp_per_iter, 
+          uint32_t smem_iters_row, uint32_t smem_iters_col, SwizzleMode swizzle_mode, uint32_t stride, uint32_t CTA>
+__device__ __forceinline__ void update_fp8_V_global_to_share(int8_t **lane_ptr, uint32_t &smem_offset,
+                                                    const uint32_t &gmem_stride,
+                                                    const smem_t<swizzle_mode, stride> &smem)
+{
+  static_assert(global_to_shared_copy_lines_per_warp_per_iter * global_to_shared_line_lanes == WARP_SIZE);
+  constexpr uint32_t pack_size_fp8 = 16;
+
+#pragma unroll
+  for (uint32_t i = 0; i < smem_iters_col; i++)
+  {
+#pragma unroll
+    for (uint32_t j = 0; j < smem_iters_row; j++)
+    {
+      *lane_ptr += (global_to_shared_line_lanes * pack_size_fp8);
+      smem_offset = smem.advance_offset_by_column<global_to_shared_line_lanes>(smem_offset);
+    }
+
+    smem_offset = smem.advance_offset_by_row<global_to_shared_copy_lines_per_warp_per_iter>(smem_offset - (smem_iters_row * global_to_shared_line_lanes));
+    *lane_ptr += ((global_to_shared_copy_lines_per_warp_per_iter * gmem_stride) - (smem_iters_row * global_to_shared_line_lanes * pack_size_fp8));
+  }
+  smem_offset -= (smem_iters_col * global_to_shared_copy_lines_per_warp_per_iter * stride);
+  // for QK: *lane_ptr += (CTA - smem_iters_col * global_to_shared_copy_lines_per_warp_per_iter) * gmem_stride;
+  *lane_ptr += CTA; // ! prevent underflow 
+  *lane_ptr -= (smem_iters_col * global_to_shared_copy_lines_per_warp_per_iter) * gmem_stride;
+}
 
 template <uint32_t num_warps_q, uint32_t num_warps_k, 
           uint32_t num_tiles_q, uint32_t num_tiles_k, uint32_t num_tiles_qk_inner, 

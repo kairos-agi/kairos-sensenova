@@ -112,6 +112,7 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         # load text_encoder
         print(f'loading text_encoder from {text_encoder_path} ...')
         text_encoder = QwenVLTextEncoder(dtype=torch_dtype, device=device, from_pretrained=text_encoder_path)
+        torch.cuda.empty_cache()
         pipe.prompter = text_encoder
         print('loading text_encoder done .')
 

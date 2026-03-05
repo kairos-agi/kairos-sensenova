@@ -53,8 +53,9 @@ def ensure_torch():
 
 # ---------- Main Logic ----------
 def main():
-    if FLAGS_KAIROS_CUDA_SM != 80:
-        print("Current platform is not CUDA or not SM=80, skipping installation.")
+    SUPPORTED_ARCHS = {80, 89, 120, 121}
+    if FLAGS_KAIROS_CUDA_SM not in SUPPORTED_ARCHS:
+        print(f"Current platform is not CUDA or not SM={FLAGS_KAIROS_CUDA_SM}, skipping installation.")
         return
 
     # Ensure torch is installed
