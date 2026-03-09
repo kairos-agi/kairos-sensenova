@@ -164,7 +164,7 @@ Real-time Edge Performance: Industry-leading inference speed with ultra-low reso
 
 *（results reproduced from open-source model baselines, "robot" refers to the corresponding results of the robot subset.）
 
-Kairos models deliver SOTA performance across diverse benchmarks. In embodied scenarios, Kairos-Robot leads PAI-Bench with a score of 80.08 and dominates generalization tasks in DreamGen Bench. For general world modeling, Kairos 3.0-4B matches or exceeds larger-scale models on WorldModelBench and VideoPHY, achieving a perfect balance of precision and efficiency at a compact 4B scale.
+Kairos models deliver SOTA performance across diverse benchmarks. In embodied scenarios, Kairos-Robot leads PAI-Bench with a score of 80.03 and dominates generalization tasks in DreamGen Bench. For general world modeling, Kairos 3.0-4B matches or exceeds larger-scale models on WorldModelBench and VideoPHY, achieving a perfect balance of precision and efficiency at a compact 4B scale.
 
 ### ⚡ 5.2 Deployment
 #### 5.2.1 Real-time Inference
