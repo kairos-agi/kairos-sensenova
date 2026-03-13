@@ -38,7 +38,6 @@ if FLAGS_KAIROS_CUDA_SM in SUPPORTED_ARCHS:
         SAGE_ATTN_AVAILABLE = True
     except ModuleNotFoundError:
         SAGE_ATTN_AVAILABLE = False
-
 try:
     from fla.layers import GatedDeltaNet
 except ModuleNotFoundError:
@@ -50,8 +49,7 @@ from kairos.third_party.fla.layers.gated_deltanet_with_tp import GatedDeltaNet a
 from kairos.third_party.fla.models.utils import Cache as fla_Cahce
 import torch.distributed as dist
 from kairos.modules.utils import parallel_state, FLAGS_KAIROS_IS_METAX
-from kairos.modules.utils.linear import ColumnParallelLinear,RowParallelLinear
-
+from kairos.modules.utils.tp_utils import build_tp_chunk_list, all2all_seq_to_head, all2all_head_to_seq, _gather_input_sp, _distribute_input_sp
 
 #================================================================
 #====================rope_apply_for3d_triton当前只适用于沐曦========
@@ -417,35 +415,6 @@ class SelfAttention(nn.Module):
                 out = out[:, :-pad_len]
         return out
 
-def _prefix_sum(xs):
-    ps = [0]
-    s = 0
-    for v in xs:
-        s += int(v)
-        ps.append(s)
-    return ps
-
-def _build_plan(full_dim: int, tp_rank: int, tp_size: int, tp_chunk_list=None):
-    if tp_chunk_list is None:
-        if full_dim % tp_size != 0:
-            raise RuntimeError(f"full_dim({full_dim}) must be divisible by tp_size({tp_size}) in balanced mode")
-        local = full_dim // tp_size
-        start = tp_rank * local
-        end = start + local
-        return start, end, local
-
-    if len(tp_chunk_list) != tp_size:
-        raise RuntimeError(f"len(tp_chunk_list)={len(tp_chunk_list)} != tp_size={tp_size}")
-    if any(int(v) <= 0 for v in tp_chunk_list):
-        raise RuntimeError(f"tp_chunk_list must be positive ints, got {tp_chunk_list}")
-
-    total = sum(int(v) for v in tp_chunk_list)
-    chunk_dim = full_dim // total
-    ps = _prefix_sum(tp_chunk_list)
-    start = ps[tp_rank] * chunk_dim
-    end = ps[tp_rank + 1] * chunk_dim
-    return start, end, end - start
-
 def tensor_parallel_rms_norm(x, norm, tp_chunk_list):
     tp_rank = parallel_state.get_context_parallel_rank()
     tp_group = parallel_state.get_context_parallel_group()
@@ -478,6 +447,21 @@ def tensor_parallel_rms_norm(x, norm, tp_chunk_list):
     out = x_fp32 * torch.rsqrt(variance + norm.eps) * weight
     return out.to(x.dtype)
 
+def _distribute_freqs_sp(freqs, context_group):
+    context_group_world_size = dist.get_world_size(group=context_group)
+    context_group_rank = dist.get_rank(group=context_group)
+    if context_group_world_size <= 1:
+        return freqs
+
+    N, B, D = freqs.shape
+    assert N % context_group_world_size == 0, 'cannot split tensor {} vs {}'.format(freqs.shape, context_group_world_size)
+    local_dim = N // context_group_world_size
+    start_idx = context_group_rank * local_dim
+    end_idx = start_idx + local_dim if context_group_rank != context_group_world_size - 1 else N
+
+    local_freqs = freqs[start_idx:end_idx, :, :].contiguous()
+    return local_freqs
+
 class SelfAttentionTP(nn.Module):
     def __init__(self, dim: int, num_heads: int, eps: float = 1e-6, dilated_length=1, window_size=3):
         super().__init__()
@@ -486,40 +470,37 @@ class SelfAttentionTP(nn.Module):
 
         self.tp_group = parallel_state.get_context_parallel_group()
         self.tp_size = parallel_state.get_context_parallel_world_size()
-    
-        # assert num_heads % self.tp_size == 0, "num_heads must be divisible by tp_size"
+        self.context_group = self.tp_group
 
-        self.tp_chunk_list = self._build_tp_chunk_list(num_heads, self.tp_size)
-        self.num_heads_local = self.tp_chunk_list[
-            parallel_state.get_context_parallel_rank()
-        ]
+        if self.num_heads % self.tp_size != 0:
+            self.tp_chunk_list = build_tp_chunk_list(self.num_heads, self.tp_size)
+            num_heads_local = self.tp_chunk_list[
+                parallel_state.get_context_parallel_rank()
+            ]
+        else:
+            self.tp_chunk_list = None
+            num_heads_local = self.num_heads // self.tp_size
 
-        # self.num_heads_local = num_heads // self.tp_size
-        self.head_dim = dim // num_heads
-        assert dim % num_heads == 0, "dim must be divisible by num_heads"
-        self.inner_dim = self.num_heads_local * self.head_dim  
+        self.head_dim = dim // self.num_heads
+        assert dim % self.num_heads == 0, "dim must be divisible by num_heads"
 
         self.dilated_length = dilated_length
         self.window_size = window_size
 
-        self.q = ColumnParallelLinear(dim, dim, gather_output=False, tp_chunk_list=self.tp_chunk_list)
-        self.k = ColumnParallelLinear(dim, dim, gather_output=False, tp_chunk_list=self.tp_chunk_list)
-        self.v = ColumnParallelLinear(dim, dim, gather_output=False, tp_chunk_list=self.tp_chunk_list)
-    
-        self.o = RowParallelLinear(dim, dim, tp_chunk_list=self.tp_chunk_list)
+        self.q = nn.Linear(dim, dim)
+        self.k = nn.Linear(dim, dim)
+        self.v = nn.Linear(dim, dim)
+        self.o = nn.Linear(dim, dim)
 
         self.norm_q = FusedRMSNorm(dim, eps=eps)
         self.norm_k = FusedRMSNorm(dim, eps=eps)
 
         if SAGE_ATTN_AVAILABLE:
-            self.attn = SagAttentionModule(self.num_heads_local)
+            self.attn = SagAttentionModule(num_heads_local)
         else:
-            self.attn = AttentionModule(self.num_heads_local)
+            self.attn = AttentionModule(num_heads_local)
 
-    def _build_tp_chunk_list(self, num_heads, tp_size):
-        base = num_heads // tp_size
-        rem = num_heads % tp_size
-        return [base + (1 if r < rem else 0) for r in range(tp_size)]
+        self._debug_saved_attn_out = False
 
     def extra_repr(self):
         return f'dilated_length={self.dilated_length}, window_size={self.window_size}, tp_size={self.tp_size}'
@@ -528,43 +509,51 @@ class SelfAttentionTP(nn.Module):
     def forward(self, x, f, freqs, L=1):
         dilated_length = self.dilated_length
     
-        l_q = self.q(x)
-        l_k = self.k(x)
-
-        q= tensor_parallel_rms_norm(l_q, self.norm_q, self.tp_chunk_list)
-        k= tensor_parallel_rms_norm(l_k, self.norm_k, self.tp_chunk_list)
-
+        q = self.norm_q(self.q(x))
+        k = self.norm_k(self.k(x))
         v = self.v(x)
-    
-        if FLAGS_KAIROS_IS_METAX:
-            q = rope_apply_for3d_triton(q, f, freqs, self.num_heads_local)
-            k = rope_apply_for3d_triton(k, f, freqs, self.num_heads_local)
-        else:
-            q = rope_apply_for3d(q, f, freqs, self.num_heads_local)
-            k = rope_apply_for3d(k, f, freqs, self.num_heads_local)
 
-        use_dilated = dilated_length > 1 and x.shape[1] // (dilated_length * L) > 1
+        freqs = _distribute_freqs_sp(freqs, self.context_group)
+        if FLAGS_KAIROS_IS_METAX:
+            q = rope_apply_for3d_triton(q, f, freqs, self.num_heads)
+            k = rope_apply_for3d_triton(k, f, freqs, self.num_heads)
+        else:
+            q = rope_apply_for3d(q, f, freqs, self.num_heads)
+            k = rope_apply_for3d(k, f, freqs, self.num_heads)
+
+        q = all2all_seq_to_head(q, self.context_group, self.tp_chunk_list, self.head_dim)
+        k = all2all_seq_to_head(k, self.context_group, self.tp_chunk_list, self.head_dim)
+        v = all2all_seq_to_head(v, self.context_group, self.tp_chunk_list, self.head_dim)
+
+        seq_local = x.shape[1]
+        seq_global = seq_local * self.tp_size
+        use_dilated = dilated_length > 1 and seq_global // (dilated_length * L) > 1
     
-        if use_dilated:     
-            assert x.shape[1] % L == 0, "L should equal to the num of tokens per frame"
-            pad_len = dilated_length * L - x.shape[1] % (dilated_length * L)
+        if use_dilated:
+            # Sequence length is generally divisible; cases where it is not divisible are not supported.
+
+            assert seq_global % L == 0, "L should equal to the num of tokens per frame"
+            pad_len = dilated_length * L - seq_global % (dilated_length * L)
+
             if pad_len != 0:
                 q = F.pad(q, (0, 0, 0, pad_len))
                 k = F.pad(k, (0, 0, 0, pad_len))
                 v = F.pad(v, (0, 0, 0, pad_len))
-        
+
             q = rearrange(q, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
             k = rearrange(k, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
             v = rearrange(v, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
 
         x = self.attn(q, k, v, window_size=(L*self.window_size, L*self.window_size))
 
-        out = self.o(x)
-    
         if use_dilated:
-            out = rearrange(out, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)
+            x = rearrange(x, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)
             if pad_len != 0:
-                out = out[:, :-pad_len]
+                x = x[:, :-pad_len]
+        x = all2all_head_to_seq(x, self.context_group, self.tp_chunk_list, self.head_dim)
+
+        out = self.o(x)
+
         return out
 
 class CrossAttention(nn.Module):
@@ -589,6 +578,7 @@ class CrossAttention(nn.Module):
         self.attn = AttentionModule(self.num_heads)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor, attn_mask=None):
+
         if self.has_image_input:
             img = y[:, :257]
             ctx = y[:, 257:]
@@ -609,40 +599,6 @@ class CrossAttention(nn.Module):
             y = flash_attention(q, k_img, v_img, num_heads=self.num_heads)
             x = x + y
         return self.o(x)
-
-
-def _distribute_input_sp(x, context_group):
-    """将输入分发到多个GPU"""
-
-    context_group_world_size = dist.get_world_size(group=context_group)
-    context_group_rank = dist.get_rank(group=context_group)
-    if context_group_world_size <= 1:
-        return x
-        
-    B, N, D = x.shape
-    
-    assert N % context_group_world_size == 0, 'cannot split tensor {} vs {}'.format(x.shape, context_group_world_size)
-
-    local_dim = N // context_group_world_size
-    start_idx = context_group_rank * local_dim
-    end_idx = start_idx + local_dim if context_group_rank != context_group_world_size - 1 else N
-    
-    # local_x = x[:, start_idx:end_idx, :].contiguous()
-    local_x = x[:, start_idx:end_idx, :].contiguous()
-    
-    return local_x
-
-def _gather_input_sp(x, context_group):
-    if not dist.is_available() or not dist.is_initialized():
-        return x
-
-    world = dist.get_world_size(group=context_group)
-    if world <= 1:
-        return x
-    
-    gather_list = [torch.empty_like(x) for _ in range(world)]
-    dist.all_gather(gather_list, x, group=context_group)
-    return torch.cat(gather_list, dim=1)
 
 class GateModule(nn.Module):
     def __init__(self,):
@@ -777,19 +733,30 @@ class DiTBlock(nn.Module):
             return t_c + m_c
         
         use_seq_parallel = self.use_seq_parallel
-        if (not self.is_first_block) and use_seq_parallel:
-            full_x = _gather_input_sp(x, self.context_group)
+        if self.is_first_block and use_seq_parallel:
+            distributed_x = _distribute_input_sp(x, self.context_group)
         else:
-            full_x = x
+            distributed_x = x
 
         scale_msa = get_mod_chunk(0)
         shift_msa = get_mod_chunk(1)
 
+        sp_slice_args = None
+        if use_seq_parallel:
+            start_idx = self.context_group_rank * distributed_x.shape[1]
+            end_idx = (self.context_group_rank + 1) * distributed_x.shape[1]
+            sp_slice_args = (start_idx, end_idx)
+
+        scale_msa_local = get_mod_chunk(0, sp_slice=has_seq and sp_slice_args or None)
+        shift_msa_local = get_mod_chunk(1, sp_slice=has_seq and sp_slice_args or None)
+
         # self-attention
-        input_x = modulate(self.self_attn_norm(full_x), shift_msa, scale_msa)
+        input_x_local = modulate(self.self_attn_norm(distributed_x), shift_msa_local, scale_msa_local)
         del scale_msa, shift_msa
         if self.use_linear_attn:
             chunk_size = 40768 // 7
+            input_x = _gather_input_sp(input_x_local, self.context_group)
+            full_x = _gather_input_sp(distributed_x, self.context_group)
             if input_x.shape[1] > chunk_size:
                 cache = fla_Cahce.from_legacy_cache()
                 outputs = []
@@ -807,21 +774,13 @@ class DiTBlock(nn.Module):
                 attn_out = torch.cat(outputs, dim=1)
             else:
                 attn_out, _, _ = self.gated_delta(input_x)
-        else:
-            attn_out = self.self_attn(input_x, f, freqs, L=L)
-        gate_msa = get_mod_chunk(2)
-        full_x = self.gate(full_x, gate_msa, attn_out)
-
-        if use_seq_parallel:
+            gate_msa = get_mod_chunk(2)
+            full_x = self.gate(full_x, gate_msa, attn_out)
             distributed_x = _distribute_input_sp(full_x, self.context_group)
         else:
-            distributed_x = full_x
-
-        sp_slice_args = None
-        if use_seq_parallel:
-            start_idx = self.context_group_rank * distributed_x.shape[1]
-            end_idx = (self.context_group_rank + 1) * distributed_x.shape[1]
-            sp_slice_args = (start_idx, end_idx)
+            attn_out = self.self_attn(input_x_local, f, freqs, L=L)
+            gate_msa_local = get_mod_chunk(2, sp_slice=has_seq and sp_slice_args or None)
+            distributed_x = self.gate(distributed_x, gate_msa_local, attn_out)
 
         # cross-attention
         attn_out = self.cross_attn(self.cross_attn_norm(distributed_x), context, attn_mask=context_mask)
