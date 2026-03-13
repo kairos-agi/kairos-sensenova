@@ -11,6 +11,7 @@ from PIL import Image
 from tqdm import tqdm
 from typing import Optional
 from typing_extensions import Literal
+import gc
 
 from .base_pipeline import BasePipeline, PipelineUnit, PipelineUnitRunner
 from kairos.modules.utils import load_state_dict, init_weights_on_device
@@ -320,6 +321,8 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         for unit in self.post_units:
             inputs_shared, _, _ = self.unit_runner(unit, self, inputs_shared, inputs_posi, inputs_nega)
         # Decode
+        gc.collect()
+        torch.cuda.empty_cache()
         self.load_models_to_device(['vae'])
         video = self.vae.decode(inputs_shared["latents"], device=self.device, tiled=tiled, tile_size=tile_size, tile_stride=tile_stride)
         video = self.vae_output_to_video(video)

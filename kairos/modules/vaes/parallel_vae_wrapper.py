@@ -177,7 +177,7 @@ class ParallelVAEWrapper(nn.Module):
         return final_output
     
     def decode_sp(self, latents: torch.Tensor, device, tiled, tile_size, tile_stride):
-        height, width = latents.shape[2], latents.shape[3]
+        height, width = latents.shape[3], latents.shape[4]
         using_sp = True
         if width % self.world_size == 0:
             split_dim = 3
