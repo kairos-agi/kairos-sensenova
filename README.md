@@ -69,6 +69,12 @@ Unified Cross-Embodied Generation: A single "brain" that generalizes across sing
 ### 🔮 High-efficiency inference
 Real-time Edge Performance: Industry-leading inference speed with ultra-low resource consumption. Optimized for low-latency, high-reliability deployment across single or multi-GPU embodied systems.
 
+###  ➕ more demos
+
+
+<img src="assets/videos/demo_more.gif" width="600"/>
+
+
 ## 📦 4. Model Zoo
 | Model Version | Resolution | Use cases | Highlights |
 |:---:|:---:|:---:|:---:|
