@@ -1,0 +1,136 @@
+name: Sensecore Task Template
+
+on:
+  workflow_call:
+    inputs:
+      job_name:
+        required: true
+        type: string
+      task_config_template:
+        required: true
+        type: string
+      task_cmd_file:
+        required: true
+        type: string
+      task_config_file:
+        required: true
+        type: string
+      task_name:
+        required: true
+        type: string
+      pendding_timeout:
+        required: false
+        type: number
+        default: 7200
+      taskid_file:
+        required: true
+        type: string
+      case_cmd:
+        required: true
+        type: string
+      remote_dir:  
+        required: true
+        type: string
+      workspace_name:
+        required: false
+        type: string
+        default: 'test-cci'
+
+    secrets:
+      ZONE:
+        required: true
+      AOSS_AK:
+        required: true
+      AOSS_SK:
+        required: true
+      HTTPS_PROXY:
+        required: true
+      HTTP_PROXY:
+        required: true
+
+
+jobs:
+  run-task:
+    runs-on: ubuntu-latest
+    environment:
+      name: Env
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Verify secrets are available
+        run: |
+          if [ -z "$ZONE" ] || [ ${#AOSS_AK} -eq 0 ]; then
+            exit 1
+          else
+            echo "✅ 密钥校验成功！"
+          fi
+        env:
+          AOSS_AK: ${{ secrets.AOSS_AK }}
+          ZONE: ${{ secrets.ZONE }}
+
+      - name: Initialize ACP CLI
+        uses: ./.github/actions/init-sensecore
+        with:
+          access_key: ${{ secrets.AOSS_AK }}
+          secret_key: ${{ secrets.AOSS_SK }}
+          zone: ${{ secrets.ZONE }}
+
+      - name: Update sensecore config.yaml
+        shell: bash
+        env:
+          TEMPLATE_FILE: ${{ inputs.task_config_template }}
+          CMD_FILE: ${{ inputs.task_cmd_file }}
+          COMMIT_ID: ${{ github.sha }}
+          OUTPUT_FILE: ${{ inputs.task_config_file }}
+          CASE_CMD: ${{ inputs.case_cmd }}
+          REMOTE_DIR: ${{ inputs.remote_dir }}
+          AOSS_AK: ${{ secrets.AOSS_AK }}
+          AOSS_SK: ${{ secrets.AOSS_SK }}
+          WORKSPACE_NAME: ${{ inputs.workspace_name }}
+          HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+          HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+        run: |
+          set -e
+          echo "🔧 Configuring sensecore config.yaml..."
+          python .github/commons/scripts/update_sensecore_config.py
+
+      - name: Run Sensecore task
+        id: run_task
+        env:
+          TASK_NAME: ${{ inputs.task_name }}
+          TASK_CONFIG_FILE: ${{ inputs.task_config_file }}
+          PENDDING_TIME_OUT: ${{ inputs.pendding_timeout }}
+          INTERVAL: 30
+          TASKID_FILE: ${{ inputs.taskid_file }}
+          REMOTE_DIR: ${{ inputs.remote_dir }}
+          AOSS_AK: ${{ secrets.AOSS_AK }}
+          AOSS_SK: ${{ secrets.AOSS_SK }}
+          CASE_TYPE: ${{ inputs.case_type }}
+          JOB_NAME:  ${{ inputs.job_name }}
+        run: |
+          python .github/commons/scripts/run_sensecore_task.py
+          pip install opencv-python numpy --index-url https://pypi.tuna.tsinghua.edu.cn/simple > /dev/null
+          python .github/commons/scripts/video_checker.py --gt ".github/gt_resource/${JOB_NAME}/output.mp4" --gen "${{ inputs.remote_dir }}/output.mp4" --ssim_threshold 0.90 --psnr_threshold 28
+          
+      - name: Cleanup on cancellation
+        if: ${{ cancelled() }}
+        env:
+          TASKID_FILE: ${{ inputs.taskid_file }}
+          WORKSPACE_NAME: ${{ inputs.workspace_name }}
+        run: |
+          if [ -f "$TASKID_FILE" ]; then
+            TASK_ID=$(cat "$TASKID_FILE")
+            echo "🧹 Cancelling task $TASK_ID due to workflow cancellation"
+            sco acp jobs stop --workspace-name ${WORKSPACE_NAME} ${TASK_ID}
+          else
+            echo "⚠️ No $TASKID_FILE found, skipping cancellation"
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.job_name }}
+          path: ${{ inputs.remote_dir }}/output.mp4
+      
