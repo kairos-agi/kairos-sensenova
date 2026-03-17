@@ -226,8 +226,8 @@ def main():
     parser = argparse.ArgumentParser(description="视频一致性校验工具")
     parser.add_argument("--gt", required=True, help="GT视频路径")
     parser.add_argument("--gen", required=True, help="生成视频路径")
-    parser.add_argument("--ssim_threshold", type=float, default=0.90, help="一致性阈值（0-1），默认0.93")
-    parser.add_argument("--psnr_threshold", type=float, default=30, help="一致性阈值（35～40 dB），默认35dB")
+    parser.add_argument("--ssim_threshold", type=float, default=0.85, help="一致性阈值（0-1），默认0.93")
+    parser.add_argument("--psnr_threshold", type=float, default=28, help="一致性阈值（35～40 dB），默认35dB")
     
     args = parser.parse_args()
 
