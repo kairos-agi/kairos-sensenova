@@ -4,3 +4,5 @@ assets/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
 assets/**/*.gif filter=lfs diff=lfs merge=lfs -text
 assets/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
 assets/**/*.mov filter=lfs diff=lfs merge=lfs -text
+.github/gt_resource/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
+
