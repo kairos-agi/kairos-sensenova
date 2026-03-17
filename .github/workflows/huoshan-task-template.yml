@@ -1,0 +1,135 @@
+name: HuoShan Task Template
+
+on:
+  workflow_call:
+    inputs:
+      job_name:
+        required: true
+        type: string
+      task_config_template:
+        required: true
+        type: string
+      task_cmd_file:
+        required: true
+        type: string
+      task_config_file:
+        required: true
+        type: string
+      task_name:
+        required: true
+        type: string
+      pendding_timeout:
+        required: false
+        type: number
+        default: 7200
+      taskid_file:
+        required: true
+        type: string
+      case_cmd:
+        required: true
+        type: string
+      remote_dir:  
+        required: true
+        type: string
+        
+    secrets:
+      VOLC_ACCESS_KEY:
+        required: true
+      VOLC_SECRET_KEY:
+        required: true
+      REGION:
+        required: true
+      HTTPS_PROXY:
+        required: true
+      HTTP_PROXY:
+        required: true
+      AOSS_AK:
+        required: true
+      AOSS_SK:
+        required: true
+
+
+jobs:
+  run-task:
+    runs-on: ubuntu-latest
+    environment:
+      name: Env
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+      - name: Verify secrets are available
+        run: |
+          if [ -z "$REGION" ] || [ ${#VOLC_ACCESS_KEY} -eq 0 ]; then
+            exit 1
+          else
+            echo "✅ 密钥校验成功！"
+          fi
+        env:
+          VOLC_ACCESS_KEY: ${{ secrets.VOLC_ACCESS_KEY }}
+          REGION: ${{ secrets.REGION }}
+
+      - name: Initialize volc CLI
+        uses: ./.github/actions/init-huoshan
+        with:
+          access_key: ${{ secrets.VOLC_ACCESS_KEY }}
+          secret_key: ${{ secrets.VOLC_SECRET_KEY }}
+          region: ${{ secrets.REGION }}
+
+      - name: Update huoshan config.yaml
+        shell: bash
+        env:
+          TEMPLATE_FILE: ${{ inputs.task_config_template }}
+          CMD_FILE: ${{ inputs.task_cmd_file }}
+          HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
+          HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
+          COMMIT_ID: ${{ github.sha }}
+          OUTPUT_FILE: ${{ inputs.task_config_file }}
+          CASE_CMD: ${{ inputs.case_cmd }}
+          REMOTE_DIR: ${{ inputs.remote_dir }}
+          AOSS_AK: ${{ secrets.AOSS_AK }}
+          AOSS_SK: ${{ secrets.AOSS_SK }}
+        run: |
+          set -e
+          echo "🔧 Configuring huoshan config.yaml..."
+          python .github/commons/scripts/update_huoshan_config.py
+
+      - name: Run huoshan task
+        id: run_task
+        env:
+          TASK_NAME: ${{ inputs.task_name }}
+          TASK_CONFIG_FILE: ${{ inputs.task_config_file }}
+          PENDDING_TIME_OUT: ${{ inputs.pendding_timeout }}
+          INTERVAL: 30
+          TASKID_FILE: ${{ inputs.taskid_file }}
+          REMOTE_DIR: ${{ inputs.remote_dir }}
+          AOSS_AK: ${{ secrets.AOSS_AK }}
+          AOSS_SK: ${{ secrets.AOSS_SK }}
+          CASE_TYPE: ${{ inputs.case_type }}
+          JOB_NAME:  ${{ inputs.job_name }}
+        run: |
+          python .github/commons/scripts/run_huoshan_task.py
+          python .github/commons/scripts/download_remote.py
+          pip install opencv-python numpy --index-url https://pypi.tuna.tsinghua.edu.cn/simple > /dev/null
+          python .github/commons/scripts/video_checker.py --gt ".github/gt_resource/${JOB_NAME}/output.mp4" --gen "${{ inputs.remote_dir }}/output.mp4"
+          
+      - name: Cleanup on cancellation
+        if: ${{ cancelled() }}
+        env:
+          TASKID_FILE: ${{ inputs.taskid_file }}
+        run: |
+          if [ -f "$TASKID_FILE" ]; then
+            TASK_ID=$(cat "$TASKID_FILE")
+            echo "🧹 Cancelling task $TASK_ID due to workflow cancellation"
+            volc ml_task cancel --id "$TASK_ID"
+          else
+            echo "⚠️ No $TASKID_FILE found, skipping cancellation"
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.job_name }}
+          path: ${{ inputs.remote_dir }}
+      

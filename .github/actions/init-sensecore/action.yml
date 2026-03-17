@@ -1,0 +1,81 @@
+name: 'Init ACP Engine CLI'
+description: 'Install and configure ACP CLI for GitHub Actions'
+inputs:
+  access_key:
+    description: 'ACP Engine Access Key ID'
+    required: true
+  secret_key:
+    description: 'ACP Engine Secret Access Key'
+    required: true
+  zone:
+    description: 'Default zone (e.g., cn-sh-01a)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Verify secrets are available
+      run: |
+        if [ -z "$ZONE" ] || [ ${#ACCESS_KEY} -eq 0 ] || [ ${#SECRET_KEY} -eq 0 ]; then
+          echo "❌ 密钥校验失败，请完善配置 settings --> environments！"
+          exit 1
+        else
+          echo "✅ 密钥校验成功！"
+        fi
+      env:
+        ACCESS_KEY: ${{ inputs.access_key }}
+        SECRET_KEY: ${{ inputs.secret_key }}
+        ZONE: ${{ inputs.zone }}
+      shell: bash
+    - name: Install ACP CLI
+      shell: bash
+      run: |
+        echo "🚀 Installing ACP CLI..."
+        curl -sSfL https://sco.sensecore.cn/registry/sco/install.sh  | sh && export PATH=$HOME/.sco/bin:$PATH
+        # 将 CLI 路径永久加入 PATH（后续步骤生效）
+        echo "$HOME/.sco/bin" >> $GITHUB_PATH
+        sco components install acp
+        echo "✅ Installation completed."
+
+    - name: Verify installation
+      shell: bash
+      run: |
+        if ! sco acp -v &>/dev/null; then
+          echo "❌ ACP CLI installation failed."
+          exit 1
+        fi
+        echo "✅ ACP version: $(sco acp -v)"
+
+    - name: Configure ACP CLI
+      shell: bash
+      env:
+        ACCESS_KEY: ${{ inputs.access_key }}
+        SECRET_KEY: ${{ inputs.secret_key }}
+        ZONE: ${{ inputs.zone }}
+      run: |
+        set -e
+        echo "🔧 Configuring ACP CLI..."
+
+        # 确保配置目录存在
+        mkdir -p .github/config/ACP $HOME/.config/sco/profiles/
+
+        # 创建ACP/default.toml默认模板
+        echo "access_key_id = '1234'" >> .github/config/ACP/default.toml
+        echo "access_key_secret = '12345'" >> .github/config/ACP/default.toml
+        echo "zone = '12345'" >> .github/config/ACP/default.toml
+
+        # 替换 default.toml 中的密钥
+        sed -i.bak \
+            -e "s/^access_key_id[[:space:]]*=.*/access_key_id = \'${ACCESS_KEY}\'/" \
+            -e "s/^access_key_secret[[:space:]]*=.*/access_key_secret = \'${SECRET_KEY}\'/" \
+            -e "s/^zone[[:space:]]*=.*/zone = \'${ZONE}\'/" \
+            .github/config/ACP/default.toml
+
+        # 复制配置文件到 $HOME/.config/sco/profiles/default.toml（ACP CLI 默认读取位置）
+        echo $HOME
+        cp .github/config/ACP/default.toml $HOME/.config/sco/profiles/default.toml
+        # 清理备份文件（可选）
+        rm -f .github/config/ACP/default.toml .github/config/ACP/default.toml.bak
+
+        echo "✅ ACP CLI configured successfully."
+    
