@@ -4,7 +4,6 @@ export http_proxy
 export https_proxy
 
 echo "commit_id: $commit_id"
-apt install git-lfs
 git clone --depth 1 https://github.com/kairos-agi/kairos-sensenova.git /root/code/kairos-sensenova
 cd /root/code/kairos-sensenova
 git fetch --depth 1 origin "$commit_id"

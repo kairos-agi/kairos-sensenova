@@ -18,7 +18,7 @@ RemoteMountCodePath: "/root/code/"
 Envs: []
 
 # 镜像 URL 地址
-ImageUrl: "iag-ad-01-cn-shanghai.cr.volces.com/ad/kairos_sensenova_awq:v0.0.1"
+ImageUrl: "iag-ad-01-cn-shanghai.cr.volces.com/ad/kairos_sensenova_awq:v0.0.2"
 # 当 ImageUrl 为私有仓库的镜像时需要填写仓库的用户名和密钥才能拉取镜像
 # ImageCredential:
 #     RegistryUsername: ""
