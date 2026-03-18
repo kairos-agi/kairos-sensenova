@@ -1,0 +1,113 @@
+# 任务名称
+TaskName: "cicd测试"
+# 任务描述
+Description: ""
+# 入口命令
+Entrypoint: "echo \"start\"\nsleep inf"
+
+# 入口命令的参数，平台将其拼接在入口命令后
+# Args: ""
+# 标签
+Tags: []
+# 本地的代码路径，如是目录且以 '/' 结尾，则将该目录下的所有内容上传到 RemoteMountCodePath，如是目录且不以 '/' 结尾，则将该目录及该目录下
+# 所有内容上传到 RemoteMountCodePath.
+UserCodePath: ""
+# 容器中的代码挂载路径
+RemoteMountCodePath: "/root/code/"
+# 环境变量
+Envs: []
+
+# 镜像 URL 地址
+ImageUrl: "iag-ad-01-cn-shanghai.cr.volces.com/ad/kairos_sensenova_awq:v0.0.2"
+# 当 ImageUrl 为私有仓库的镜像时需要填写仓库的用户名和密钥才能拉取镜像
+# ImageCredential:
+#     RegistryUsername: ""
+#     RegistryToken: ""
+# 所属资源组的 ID，为空时默认使用公共资源组，不为空时修改成用户的专有资源组的 ID. 最新版本的 volc 将逐步废弃该字段的支持
+# ResourceGroupID: "replace with your ResourceGroupID"
+# 队列 ID，为空时使用公共队列
+ResourceQueueID: "q-20250531181004-p959n"
+# 队列名称，优先级高于 ResourceQueueID
+ResourceQueueName: "Qworld-Kairos"
+# 训练框架，支持 TensorFlowPS / PyTorchDDP / MPI / BytePS / Custom
+Framework: "PyTorchDDP"
+TaskRoleSpecs:
+    - RoleName: "worker"
+      RoleReplicas: 1
+      Flavor: "custom"
+      ResourceSpec:
+        Family: "ml.pni2l"
+        CPU: 13.000
+        Memory: 234.000
+        GPUNum: 1
+
+# 最长运行时间
+ActiveDeadlineSeconds: 7200
+# 实例保留时长
+DelayExitTimeSeconds: 0
+# 可见范围，支持 Public / Queue / Private
+AccessType: "Queue"
+# 可见用户
+# AccessUsers:
+#     - "xxx"
+Preemptible: false  # 非必填，配置该任务是否为可抢占任务，默认不可抢占
+Priority: 4         # 非必填，配置任务优先级（数字越大优先级越高），仅支持配置部分档位（默认为2、4、6）。不配置时以队列中自定义任务的默认优先级为准
+# 自动重试
+RetryOptions:
+    EnableRetry: false     # 是否开启自动重试，默认关闭
+    EnableReserveResourceOnRetry: false    # 是否开启重试资源保留，默认关闭
+    MaxRetryTimes: 5       # 最大重试次数
+    IntervalSeconds: 120   # 重试间隔 = 新任务提交的时刻 - 上个任务终止的时刻
+    PolicySets:            # 自动重试的触发条件，支持 Failed（任务失败）、InstanceReclaimed（闲时资源回收）
+         - "Failed"
+# 任务诊断策略
+DiagOptions:
+    - Name: "EnvironmentalDiagnosis"
+      Enable: false
+    - Name: "PythonDetection"
+      Enable: false
+      PythonDetectionInterval: 3600
+    - Name: "LogDetection"
+      Enable: false
+      LogDetectionInterval: 1800
+# 任务 vpc 设置
+# PrivateNetwork:
+#     VpcId: "xxx"
+#     SubnetId: ""
+#     SecurityGrou
+# pIds:
+#         - ""
+# 自定义指标采集端口
+# CustomServices:
+#     - ListenPort: xxx
+#       Type: "Metrics"
+#       Path: "/metrics"
+# 是否开启 TensorBoard
+# EnableTensorBoard: true
+# 开启 TensorBoard 后填写，将日志写入到 NAS 或 vePFS 内，需开白
+# TensorBoardStorage:
+#     Type: "Nas/Vepfs"                     # 必填，TensorBoard 日志写入存储实例类型，可填写 Nas 或 Vepfs
+#     NasId: "replace with your NAS Id"     # NAS 实例 Id，当 Type 为 Nas 时填写，与 NasAddr 至少选填一个
+#     NasAddr: "replace with your NAS Addr" # NAS 实例挂载点地址，当 Type 为 Nas 时填写，与 NasId 至少选填一个
+#     SubPath: "replace with NAS sub path"  # 必填，TensorBoard 日志写入的存储实例子目录，当 Type 为 vePFS 时，需要拥有该子目录的挂载权限 
+# 挂载数据盘至训练容器中
+# SidecarMemoryRatio: "replace with your ratio"   # TOS 数据盘的缓存服务所需的内存比例
+# storages
+Storages:
+    - Type: "Vepfs"
+      MountPath: "/KAIROS_vepfs-2/KAIROS_vepfs"
+      VepfsId: "vepfs-cnshaad37c25c7a3"
+      SubPath: "KAIROS_vepfs"
+    - Type: "Vepfs"
+      MountPath: "/kairos-engineer/ModelZoo"
+      VepfsId: "vepfs-cnsh9fbc14670405"
+      SubPath: "ModelZoo"
+      ReadOnly: true
+    - Type: "Vepfs"
+      MountPath: "/kairos-engineer/kairos-engineer"
+      VepfsId: "vepfs-cnsh9fbc14670405"
+      SubPath: "kairos-engineer"
+    - Type: "Vepfs"
+      MountPath: "/kairos_vepfs_volc/action"
+      VepfsId: "vepfs-cnsh65336fad7cd5"
+      SubPath: "action"
