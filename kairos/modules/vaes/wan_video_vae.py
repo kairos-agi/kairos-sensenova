@@ -1087,17 +1087,16 @@ class WanVideoVAE(nn.Module):
             x[-border_width:] = torch.flip((torch.arange(border_width) + 1) / border_width, dims=(0,))
         return x
 
-
     def build_mask(self, data, is_bound, border_width):
         _, _, _, H, W = data.shape
-        h = self.build_1d_mask(H, is_bound[0], is_bound[1], border_width[0])
-        w = self.build_1d_mask(W, is_bound[2], is_bound[3], border_width[1])
 
-        h = repeat(h, "H -> H W", H=H, W=W)
-        w = repeat(w, "W -> H W", H=H, W=W)
+        device = data.device
 
-        mask = torch.stack([h, w]).min(dim=0).values
-        mask = rearrange(mask, "H W -> 1 1 1 H W")
+        h = self.build_1d_mask(H, is_bound[0], is_bound[1], border_width[0]).to(device)
+        w = self.build_1d_mask(W, is_bound[2], is_bound[3], border_width[1]).to(device)
+
+        mask = torch.min(h.view(H, 1), w.view(1, W))
+        mask = mask.view(1, 1, 1, H, W)
         return mask
 
 
@@ -1149,20 +1148,33 @@ class WanVideoVAE(nn.Module):
         images = torch.cat(full_images, dim=split_dim + 1)
 
         return images
-
-    def tiled_decode(self, hidden_states, device, tile_size, tile_stride):
+    
+    def tiled_decode(self, hidden_states, device, tile_size, tile_stride, tile_batch_size=4):
+        from collections import defaultdict
         _, _, T, H, W = hidden_states.shape
         size_h, size_w = tile_size
-        stride_h, stride_w = tile_stride
 
-        # Split tasks
-        tasks = []
+        stride_h = max(1, size_h - 4)
+        stride_w = max(1, size_w - 4)
+
+        tasks_by_shape = defaultdict(list)
+
         for h in range(0, H, stride_h):
             if (h-stride_h >= 0 and h-stride_h+size_h >= H): continue
             for w in range(0, W, stride_w):
                 if (w-stride_w >= 0 and w-stride_w+size_w >= W): continue
-                h_, w_ = h + size_h, w + size_w
-                tasks.append((h, h_, w, w_))
+
+                h_orig, w_orig = h + size_h, w + size_w
+                actual_h_ = min(h_orig, H)
+                actual_w_ = min(w_orig, W)
+
+                shape = (actual_h_ - h, actual_w_ - w)
+                tasks_by_shape[shape].append((h, h_orig, actual_h_, w, w_orig, actual_w_))
+
+        batched_tasks = []
+        for shape, tasks in tasks_by_shape.items():
+            for i in range(0, len(tasks), tile_batch_size):
+                batched_tasks.append(tasks[i:i + tile_batch_size])
 
         data_device = "cpu"
         computation_device = device
@@ -1171,36 +1183,34 @@ class WanVideoVAE(nn.Module):
         weight = torch.zeros((1, 1, out_T, H * self.upsampling_factor, W * self.upsampling_factor), dtype=hidden_states.dtype, device=data_device)
         values = torch.zeros((1, 3, out_T, H * self.upsampling_factor, W * self.upsampling_factor), dtype=hidden_states.dtype, device=data_device)
 
-        for h, h_, w, w_ in tqdm(tasks, desc="VAE decoding"):
-            hidden_states_batch = hidden_states[:, :, :, h:h_, w:w_].to(computation_device)
-            hidden_states_batch = self.model.decode(hidden_states_batch, self.scale).to(data_device)
+        for batch in tqdm(batched_tasks, desc="VAE decoding (Ultimate Batched)"):
+            hidden_states_batch = torch.cat([
+                hidden_states[:, :, :, h:actual_h_, w:actual_w_] for (h, _, actual_h_, w, _, actual_w_) in batch
+            ], dim=0).to(computation_device)
 
-            mask = self.build_mask(
-                hidden_states_batch,
-                is_bound=(h==0, h_>=H, w==0, w_>=W),
-                border_width=((size_h - stride_h) * self.upsampling_factor, (size_w - stride_w) * self.upsampling_factor)
-            ).to(dtype=hidden_states.dtype, device=data_device)
+            out_batch = self.model.decode(hidden_states_batch, self.scale)
 
-            target_h = h * self.upsampling_factor
-            target_w = w * self.upsampling_factor
-            values[
-                :,
-                :,
-                :,
-                target_h:target_h + hidden_states_batch.shape[3],
-                target_w:target_w + hidden_states_batch.shape[4],
-            ] += hidden_states_batch * mask
-            weight[
-                :,
-                :,
-                :,
-                target_h: target_h + hidden_states_batch.shape[3],
-                target_w: target_w + hidden_states_batch.shape[4],
-            ] += mask
+            out_batch = out_batch.to(hidden_states.dtype)
+
+            for b_idx, (h, h_orig, actual_h_, w, w_orig, actual_w_) in enumerate(batch):
+                out_tile = out_batch[b_idx:b_idx+1]
+                mask = self.build_mask(
+                    out_tile,
+                    is_bound=(h==0, h_orig>=H, w==0, w_orig>=W),
+                    border_width=((size_h - stride_h) * self.upsampling_factor, (size_w - stride_w) * self.upsampling_factor)
+                )
+                out_tile = (out_tile * mask).to(data_device)
+                mask_cpu = mask.to(data_device)
+
+                target_h = h * self.upsampling_factor
+                target_w = w * self.upsampling_factor
+
+                values[:, :, :, target_h:target_h + out_tile.shape[3], target_w:target_w + out_tile.shape[4]] += out_tile
+                weight[:, :, :, target_h: target_h + mask_cpu.shape[3], target_w: target_w + mask_cpu.shape[4]] += mask_cpu
+
         values = values / weight
         values = values.clamp_(-1, 1)
         return values
-
 
     def tiled_encode(self, video, device, tile_size, tile_stride):
         _, _, T, H, W = video.shape
