@@ -34,7 +34,7 @@ on:
       workspace_name:
         required: false
         type: string
-        default: 'test-cci'
+        default: 'kairos-sensenova-ci'
 
     secrets:
       ZONE:
@@ -89,6 +89,7 @@ jobs:
           AOSS_AK: ${{ secrets.AOSS_AK }}
           AOSS_SK: ${{ secrets.AOSS_SK }}
           WORKSPACE_NAME: ${{ inputs.workspace_name }}
+          JOB_NAME:  ${{ inputs.job_name }}
           HTTP_PROXY: ${{ secrets.HTTP_PROXY }}
           HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
         run: |
