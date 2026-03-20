@@ -470,7 +470,6 @@ class SelfAttentionTP(nn.Module):
 
         self.tp_group = parallel_state.get_context_parallel_group()
         self.tp_size = parallel_state.get_context_parallel_world_size()
-        self.context_group = self.tp_group
 
         if self.num_heads % self.tp_size != 0:
             self.tp_chunk_list = build_tp_chunk_list(self.num_heads, self.tp_size)
@@ -513,7 +512,6 @@ class SelfAttentionTP(nn.Module):
         k = self.norm_k(self.k(x))
         v = self.v(x)
 
-        freqs = _distribute_freqs_sp(freqs, self.context_group)
         if FLAGS_KAIROS_IS_METAX:
             q = rope_apply_for3d_triton(q, f, freqs, self.num_heads)
             k = rope_apply_for3d_triton(k, f, freqs, self.num_heads)
@@ -521,9 +519,9 @@ class SelfAttentionTP(nn.Module):
             q = rope_apply_for3d(q, f, freqs, self.num_heads)
             k = rope_apply_for3d(k, f, freqs, self.num_heads)
 
-        q = all2all_seq_to_head(q, self.context_group, self.tp_chunk_list, self.head_dim)
-        k = all2all_seq_to_head(k, self.context_group, self.tp_chunk_list, self.head_dim)
-        v = all2all_seq_to_head(v, self.context_group, self.tp_chunk_list, self.head_dim)
+        q = all2all_seq_to_head(q, self.tp_group, self.tp_chunk_list, self.head_dim)
+        k = all2all_seq_to_head(k, self.tp_group, self.tp_chunk_list, self.head_dim)
+        v = all2all_seq_to_head(v, self.tp_group, self.tp_chunk_list, self.head_dim)
 
         seq_local = x.shape[1]
         seq_global = seq_local * self.tp_size
@@ -550,7 +548,7 @@ class SelfAttentionTP(nn.Module):
             x = rearrange(x, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)
             if pad_len != 0:
                 x = x[:, :-pad_len]
-        x = all2all_head_to_seq(x, self.context_group, self.tp_chunk_list, self.head_dim)
+        x = all2all_head_to_seq(x, self.tp_group, self.tp_chunk_list, self.head_dim)
 
         out = self.o(x)
 
@@ -731,29 +729,16 @@ class DiTBlock(nn.Module):
                     t_c = t_c[:, start_idx:end_idx, :]
 
             return t_c + m_c
-        
-        use_seq_parallel = self.use_seq_parallel
-        if self.is_first_block and use_seq_parallel:
-            distributed_x = _distribute_input_sp(x, self.context_group)
-        else:
-            distributed_x = x
 
-        sp_slice_args = None
-        if use_seq_parallel:
-            start_idx = self.context_group_rank * distributed_x.shape[1]
-            end_idx = (self.context_group_rank + 1) * distributed_x.shape[1]
-            sp_slice_args = (start_idx, end_idx)
-
-        scale_msa = get_mod_chunk(0, sp_slice=has_seq and sp_slice_args or None)
-        shift_msa = get_mod_chunk(1, sp_slice=has_seq and sp_slice_args or None)
-
+        scale_msa = get_mod_chunk(0)
+        shift_msa = get_mod_chunk(1)
+        gate_msa = get_mod_chunk(2)
         # self-attention
-        input_x_local = modulate(self.self_attn_norm(distributed_x), shift_msa, scale_msa)
+        input_x_local = modulate(self.self_attn_norm(x), shift_msa, scale_msa)
         del scale_msa, shift_msa
         if self.use_linear_attn:
             chunk_size = 40768 // 7
             input_x = _gather_input_sp(input_x_local, self.context_group)
-            full_x = _gather_input_sp(distributed_x, self.context_group)
             if input_x.shape[1] > chunk_size:
                 cache = fla_Cahce.from_legacy_cache()
                 outputs = []
@@ -771,34 +756,50 @@ class DiTBlock(nn.Module):
                 attn_out = torch.cat(outputs, dim=1)
             else:
                 attn_out, _, _ = self.gated_delta(input_x)
-            gate_msa = get_mod_chunk(2)
-            full_x = self.gate(full_x, gate_msa, attn_out)
-            distributed_x = _distribute_input_sp(full_x, self.context_group)
+            attn_out = _distribute_input_sp(attn_out, self.context_group)
         else:
             attn_out = self.self_attn(input_x_local, f, freqs, L=L)
-            gate_msa_local = get_mod_chunk(2, sp_slice=has_seq and sp_slice_args or None)
-            distributed_x = self.gate(distributed_x, gate_msa_local, attn_out)
-
+        x = self.gate(x, gate_msa, attn_out)
+        del gate_msa, attn_out
         # cross-attention
-        attn_out = self.cross_attn(self.cross_attn_norm(distributed_x), context, attn_mask=context_mask)
-        distributed_x.add_(attn_out)
+        attn_out = self.cross_attn(self.cross_attn_norm(x), context, attn_mask=context_mask)
+        x.add_(attn_out)
         del attn_out
 
-        shift = get_mod_chunk(4, sp_slice=has_seq and sp_slice_args or None)
-        scale = get_mod_chunk(3, sp_slice=has_seq and sp_slice_args or None)
-        gate  = get_mod_chunk(5, sp_slice=has_seq and sp_slice_args or None)
+        shift = get_mod_chunk(4)
+        scale = get_mod_chunk(3)
+        gate  = get_mod_chunk(5)
 
-        distributed_input_x = modulate(self.ffn_norm(distributed_x), shift, scale)
-        distributed_ffn_out = self.ffn(distributed_input_x)
-        del distributed_input_x
-        distributed_x = self.gate(distributed_x, gate, distributed_ffn_out)
+        def chunked_ffn(input_x, shift, scale, gate, chunk_size):
+            B, N, D = input_x.shape
+            out = torch.empty_like(input_x)
+
+            for start in range(0, N, chunk_size):
+                end = min(start + chunk_size, N)
+
+                x_chunk = input_x[:, start:end, :]
+                if shift.shape[1] == 1:
+                    shift_chunk = shift
+                else:
+                    shift_chunk = shift[:, start:end, :]
+                if scale.shape[1] == 1:
+                    scale_chunk = scale
+                else:
+                    scale_chunk = scale[:, start:end, :]
+                if gate.shape[1] == 1:
+                    gate_chunk = gate
+                else:
+                    gate_chunk = gate[:, start:end, :]
+
+                inp_chunk = modulate(self.ffn_norm(x_chunk), shift_chunk, scale_chunk)
+                out[:, start:end, :] = self.gate(x_chunk, gate_chunk, self.ffn(inp_chunk))
+            return out
+
+        chunk_size = 2310
+        x = chunked_ffn(x, shift, scale, gate, chunk_size)
         del shift, scale, gate
 
-        if self.is_last_block and use_seq_parallel:
-            full_x = _gather_input_sp(distributed_x, self.context_group)
-            return full_x
-
-        return distributed_x
+        return x
 
 
 class MLP(torch.nn.Module):
@@ -994,7 +995,6 @@ class KairosDiT(torch.nn.Module):
             x = [u + v for u, v in zip(x, y_camera)]
             x = x[0].unsqueeze(0)
         grid_size = x.shape[2:]
-        x = rearrange(x, 'b c f h w -> b (f h w) c').contiguous()
         return x, grid_size
 
     def unpatchify(self, x: torch.Tensor, grid_size: torch.Tensor):
