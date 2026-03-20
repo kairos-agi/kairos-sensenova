@@ -1,5 +1,5 @@
 JobName: ""
-WorkspaceName: 'product-engineering-workspace'
+WorkspaceName: 'kairos-sensenova-ci'
 Aec2Name: "engineer-5090"
 priority: Normal
 WorkerSpec: n12lp.nn.i10.1 # 1卡5090

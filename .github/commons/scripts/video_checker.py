@@ -226,12 +226,24 @@ def main():
     parser = argparse.ArgumentParser(description="视频一致性校验工具")
     parser.add_argument("--gt", required=True, help="GT视频路径")
     parser.add_argument("--gen", required=True, help="生成视频路径")
-    parser.add_argument("--ssim_threshold", type=float, default=0.85, help="一致性阈值（0-1），默认0.93")
-    parser.add_argument("--psnr_threshold", type=float, default=28, help="一致性阈值（35～40 dB），默认35dB")
+    parser.add_argument("--ssim_threshold", type=float, default=0.9, help="一致性阈值（0-1），默认0.90")
+    parser.add_argument("--psnr_threshold", type=float, default=30, help="一致性阈值（30～40 dB），默认30dB")
     
     args = parser.parse_args()
 
+    job_name =  os.environ.get('JOB_NAME')
+    if "C500" in job_name:
+        args.ssim_threshold = 0.90
+        args.psnr_threshold = 30
+    elif "5090" in job_name:
+        args.ssim_threshold = 0.90
+        args.psnr_threshold = 28
+    elif "A800" in job_name:
+        args.ssim_threshold = 0.90
+        args.psnr_threshold = 30
+        
     checker = VideoConsistencyChecker(ssim_threshold=args.ssim_threshold, psnr_threshold=args.psnr_threshold)
+
     try:
         result = checker.compare_videos(args.gt, args.gen)
         exit(0) if result["pass"] else exit(1)
