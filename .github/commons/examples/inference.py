@@ -170,6 +170,7 @@ if __name__ == '__main__':
 
     print('build pipeline ...')
     pipeline = build_model_pipeline(cfg.pipeline)
+    pipeline.eval()
     print('build pipeline done')
 
     print('start infer ...')

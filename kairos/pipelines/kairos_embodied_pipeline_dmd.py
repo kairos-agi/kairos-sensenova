@@ -152,7 +152,11 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
             pipe.height_division_factor = pipe.vae.upsampling_factor * 2
             pipe.width_division_factor = pipe.vae.upsampling_factor * 2
         print('loading vae done')
-
+        if pipe.prompter is not None:
+            pipe.prompter.eval()
+            pipe.prompter.requires_grad_(False)
+        if pipe.image_encoder is not None:
+            pipe.image_encoder.eval()
         print(f'loading KairosEmbodiedPipeline done .')
         return pipe
 
@@ -308,7 +312,7 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
                 sigma = self.scheduler.sigmas[progress_id].to(dtype=self.torch_dtype, device=self.device)
                 x0 = inputs_shared["latents"] - velocity_pred * sigma
                 next_timestep = self.scheduler.timesteps[progress_id+1].to(dtype=self.torch_dtype, device=self.device)
-                noise = torch.randn_like(inputs_shared["latents"])
+                noise = self.generate_noise(inputs_shared["latents"].shape, seed=seed, rand_device=rand_device)
                 inputs_shared["latents"] = self.scheduler.add_noise(x0, noise, next_timestep)
             
                 if "first_frame_latents" in inputs_shared:
