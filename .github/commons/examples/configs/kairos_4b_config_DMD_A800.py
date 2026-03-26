@@ -15,6 +15,7 @@ pipeline = dict(
         load_dit_fn='strict_load',
         vram_management_enabled=False,
         selected_sampling_time = [1000, 800, 500, 100],
+        use_unified_sequence_parallel=True,
         dit_config = {
             "dit_type" : 'KairosDiT',
             "has_image_input": False,

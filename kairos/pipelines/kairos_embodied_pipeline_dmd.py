@@ -24,7 +24,8 @@ from kairos.apis.builder import KAIROS_PROCESSOR
 import torch.distributed as dist
 from kairos.modules.utils import parallel_state
 from kairos.modules.vaes.parallel_vae_wrapper import ParallelVAEWrapper
-import time
+from kairos.modules.utils.tp_utils import _gather_input_sp, _distribute_input_sp
+
 # from ..models.init_parameters import init_parameters
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2RMSNorm,
@@ -37,12 +38,13 @@ import torch.nn.functional as F
 @KAIROS_PROCESSOR.register_module()
 class KairosEmbodiedPipeline_DMD(BasePipeline):
 
-    def __init__(self, device="cuda", torch_dtype=torch.bfloat16, vram_management_enabled = False):
+    def __init__(self, device="cuda", torch_dtype=torch.bfloat16, vram_management_enabled = False, use_unified_sequence_parallel=False):
         super().__init__(
             device=device, torch_dtype=torch_dtype,
             height_division_factor=16, width_division_factor=16, time_division_factor=4, time_division_remainder=1,
             vram_management_enabled= vram_management_enabled
         )
+        self.use_unified_sequence_parallel = use_unified_sequence_parallel
         # self.scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True)
         self.score_scheduler = FlowMatchScheduler(shift=5, sigma_min=0.0, extra_one_step=True,
                                             exponential_shift=False, exponential_shift_mu=1.609)
@@ -103,10 +105,11 @@ class KairosEmbodiedPipeline_DMD(BasePipeline):
         selected_sampling_time=[],
         vram_management_enabled = False,
         parallel_mode = None,
+        use_unified_sequence_parallel=False
     ):
         
         # Initialize pipeline
-        pipe = KairosEmbodiedPipeline_DMD(device=device, torch_dtype=torch_dtype, vram_management_enabled=vram_management_enabled)
+        pipe = KairosEmbodiedPipeline_DMD(device=device, torch_dtype=torch_dtype, vram_management_enabled=vram_management_enabled, use_unified_sequence_parallel=use_unified_sequence_parallel)
         pipe.selected_sampling_time = selected_sampling_time
         
         # ***********************************************************
@@ -1083,29 +1086,55 @@ def model_fn_wan_video(
             drop_motion_frames=drop_motion_frames,
             use_gradient_checkpointing_offload=use_gradient_checkpointing_offload,
             use_gradient_checkpointing=use_gradient_checkpointing,
-            use_unified_sequence_parallel=use_unified_sequence_parallel,
+            use_unified_sequence_parallel=None,
         )
 
-    if use_unified_sequence_parallel:
-        from xfuser.core.distributed import (get_sequence_parallel_rank,
-                                            get_sequence_parallel_world_size,
-                                            get_sp_group)
-
     # Timestep
-    if dit.seperated_timestep and fuse_vae_embedding_in_latents:
-        timestep = torch.concat([
-            torch.zeros((1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device),
-            torch.ones((latents.shape[2] - 1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device) * timestep
-        ]).flatten()
-        t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep).unsqueeze(0))
-        if use_unified_sequence_parallel and dist.is_initialized() and dist.get_world_size() > 1:
-            t_chunks = torch.chunk(t, get_sequence_parallel_world_size(), dim=1)
-            t_chunks = [torch.nn.functional.pad(chunk, (0, 0, 0, t_chunks[0].shape[1]-chunk.shape[1]), value=0) for chunk in t_chunks]
-            t = t_chunks[get_sequence_parallel_rank()]
-        t_mod = dit.time_projection(t).unflatten(2, (6, dit.dim))
+    if use_unified_sequence_parallel:
+        cp_world_size = parallel_state.get_context_parallel_world_size()
     else:
-        t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep))
-        t_mod = dit.time_projection(t).unflatten(1, (6, dit.dim))
+        cp_world_size = 0
+
+    if cp_world_size > 1:
+        cp_rank = parallel_state.get_context_parallel_rank()
+        tokens_per_frame = latents.shape[3] * latents.shape[4] // 4
+        num_frames = latents.shape[2]
+        total_tokens = num_frames * tokens_per_frame
+
+        if total_tokens % cp_world_size != 0:
+            raise ValueError(
+                f"total_tokens={total_tokens} must be divisible by cp_world_size={cp_world_size}"
+            )
+
+        local_tokens = total_tokens // cp_world_size
+        start = cp_rank * local_tokens
+        end = start + local_tokens
+
+        if dit.seperated_timestep and fuse_vae_embedding_in_latents:
+            global_token_idx = torch.arange(start, end, device=latents.device)
+            frame_idx = global_token_idx // tokens_per_frame
+
+            timestep_local = torch.where(
+                frame_idx == 0,
+                torch.zeros((), dtype=latents.dtype, device=latents.device),
+                torch.as_tensor(timestep, dtype=latents.dtype, device=latents.device),
+            )
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep_local).unsqueeze(0))
+            t_mod = dit.time_projection(t).unflatten(2, (6, dit.dim))
+        else:
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep))
+            t_mod = dit.time_projection(t).unflatten(1, (6, dit.dim))
+    else:
+        if dit.seperated_timestep and fuse_vae_embedding_in_latents:
+            timestep = torch.concat([
+                torch.zeros((1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device),
+                torch.ones((latents.shape[2] - 1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device) * timestep
+            ]).flatten()
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep).unsqueeze(0))
+            t_mod = dit.time_projection(t).unflatten(2, (6, dit.dim))
+        else:
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep))
+            t_mod = dit.time_projection(t).unflatten(1, (6, dit.dim))
     
     # Motion Controller
     if motion_bucket_id is not None and motion_controller is not None:
@@ -1132,8 +1161,6 @@ def model_fn_wan_video(
     # Merged cfg
     if x.shape[0] != context.shape[0]:
         x = torch.concat([x] * context.shape[0], dim=0)
-    if timestep.shape[0] != context.shape[0]:
-        timestep = torch.concat([timestep] * context.shape[0], dim=0)
 
     # Image Embedding
     if y is not None and dit.require_vae_embedding:
@@ -1144,6 +1171,40 @@ def model_fn_wan_video(
 
     # Add camera control
     x, (f, h, w) = dit.patchify(x, control_camera_latents_input)
+    if use_unified_sequence_parallel and cp_world_size > 1:
+        x_full = rearrange(x, 'b c f h w -> b (f h w) c')
+        x = _distribute_input_sp(x_full, parallel_state.get_context_parallel_group())
+        del x_full
+        total_tokens = f * h * w
+        assert total_tokens % cp_world_size == 0
+
+        local_tokens = total_tokens // cp_world_size
+        start = cp_rank * local_tokens
+        end = start + local_tokens
+
+        global_token_idx = torch.arange(start, end, device=x.device)
+
+        frame_idx = global_token_idx // (h * w)
+        rem = global_token_idx % (h * w)
+        h_idx = rem // w
+        w_idx = rem % w
+
+        freq_f_table = dit.freqs[0] if dit.freqs[0].device == x.device else dit.freqs[0].to(x.device)
+        freq_h_table = dit.freqs[1] if dit.freqs[1].device == x.device else dit.freqs[1].to(x.device)
+        freq_w_table = dit.freqs[2] if dit.freqs[2].device == x.device else dit.freqs[2].to(x.device)
+
+        freqs = torch.cat([
+            freq_f_table.index_select(0, frame_idx),
+            freq_h_table.index_select(0, h_idx),
+            freq_w_table.index_select(0, w_idx),
+        ], dim=-1).unsqueeze(1)   # [local_tokens, 1, dim]
+    else:
+        x = rearrange(x, 'b c f h w -> b (f h w) c').contiguous()
+        freqs = torch.cat([
+            dit.freqs[0][:f].view(f, 1, 1, -1).expand(f, h, w, -1),
+            dit.freqs[1][:h].view(1, h, 1, -1).expand(f, h, w, -1),
+            dit.freqs[2][:w].view(1, 1, w, -1).expand(f, h, w, -1)
+        ], dim=-1).reshape(f * h * w, 1, -1).to(x.device)
     grid_size = (f, h, w)
 
     # Reference image
@@ -1153,14 +1214,7 @@ def model_fn_wan_video(
         reference_latents = dit.ref_conv(reference_latents).flatten(2).transpose(1, 2)
         x = torch.concat([reference_latents, x], dim=1)
         f += 1
-    
-    freqs = torch.cat([
-        dit.freqs[0][:f].view(f, 1, 1, -1).expand(f, h, w, -1),
-        dit.freqs[1][:h].view(1, h, 1, -1).expand(f, h, w, -1),
-        dit.freqs[2][:w].view(1, 1, w, -1).expand(f, h, w, -1)
-    ], dim=-1).reshape(f * h * w, 1, -1).to(x.device)
 
-    
     # TeaCache
     if tea_cache is not None:
         tea_cache_update = tea_cache.check(dit, x, t_mod)
@@ -1169,15 +1223,7 @@ def model_fn_wan_video(
         
     if vace_context is not None:
         vace_hints = vace(x, vace_context, context, t_mod, freqs)
-    
-    raw_shape = x.shape
-    # blocks
-    if use_unified_sequence_parallel:
-        if dist.is_initialized() and dist.get_world_size() > 1:
-            chunks = torch.chunk(x, get_sequence_parallel_world_size(), dim=1)
-            pad_shape = chunks[0].shape[1] - chunks[-1].shape[1]
-            chunks = [torch.nn.functional.pad(chunk, (0, 0, 0, chunks[0].shape[1]-chunk.shape[1]), value=0) for chunk in chunks]
-            x = chunks[get_sequence_parallel_rank()]
+
     if tea_cache_update:
         x = tea_cache.update(x)
     else:
@@ -1218,17 +1264,15 @@ def model_fn_wan_video(
     # assert raw_shape == now_shape, 'shape not same, check seq prallel, {} vs {}'.format(raw_shape, now_shape)
     # debug info 
     # *********************************
-
     x = dit.head(x, t)
-    if use_unified_sequence_parallel:
-        if dist.is_initialized() and dist.get_world_size() > 1:
-            x = get_sp_group().all_gather(x, dim=1)
-            x = x[:, :-pad_shape] if pad_shape > 0 else x
+    x_full = _gather_input_sp(x, parallel_state.get_context_parallel_group())
+    del x
     # Remove reference latents
     if reference_latents is not None:
-        x = x[:, reference_latents.shape[1]:]
+        x_full = x_full[:, reference_latents.shape[1]:]
         f -= 1
-    x = dit.unpatchify(x, (f, h, w))
+    x = dit.unpatchify(x_full, (f, h, w))
+    del x_full, t
     return x
 
 
