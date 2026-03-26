@@ -223,6 +223,8 @@ pip install -r requirements.txt
 
 - Download with huggingface
 ```bash
+pip install -U huggingface_hub 
+
 # Download kairos model
 # 4B-480P
 hf download kairos-agi/kairos-sensenova-4B-480P-pretrained \
@@ -241,8 +243,10 @@ hf download kairos-agi/kairos-sensenova-robot-4B-480P-distilled \
   --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
 
 ```
-- Download with model-scope
+- Download with modelscope
 ```bash
+pip install modelscope
+
 # Download kairos model
 # 4B-480P
 modelscope download kairos-team/kairos-sensenova-4B-480P-pretrained \
@@ -264,7 +268,6 @@ modelscope download kairos-team/kairos-sensenova-robot-4B-480P-distilled \
 ### 6.3 Run Inference
 ```bash
 # Step1: Fetch the Model
-pip install -U huggingface_hub 
 mkdir -p models/Qwen models/Wan2.1-T2V-14B
 
 # Download Qwen2.5-VL for Text-Encoder
