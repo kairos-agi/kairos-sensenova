@@ -219,28 +219,53 @@ docker run --rm -it \
 pip install -r requirements.txt
 ```
 
-### 6.2 Run Inference
-```bash
-# Step1: Fetch the Model
-pip install -U huggingface_hub 
-mkdir -p models/Kairos models/Qwen models/Wan2.1-T2V-14B
+### 6.2 Download Models
 
+- Download with huggingface
+```bash
 # Download kairos model
-# 480P
-hf download kairos-sensenova-4B-480P-pretrained \
+# 4B-480P
+hf download kairos-agi/kairos-sensenova-4B-480P-pretrained \
   --local-dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
 
-# 720P
+# 4B-720P
 hf download kairos-agi/kairos-sensenova-4B-720P \
   --local-dir models/Kairos-model/kairos-sensenova-4B-720P 
 
 # 4B-robot
 hf download kairos-agi/kairos-sensenova-robot-4B-480P \
-  --local-dir models/kairos-agi/kairos-sensenova-robot-4B-480P
+  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P
 
 # 4B-robot distilled
 hf download kairos-agi/kairos-sensenova-robot-4B-480P-distilled \
-  --local-dir models/kairos-agi/kairos-sensenova-robot-4B-480P-distilled
+  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
+
+```
+- Download with model-scope
+```bash
+# Download kairos model
+# 4B-480P
+modelscope download kairos-team/kairos-sensenova-4B-480P-pretrained \
+  --local-dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
+
+# 4B-720P
+modelscope download kairos-team/kairos-sensenova-4B-720P \
+  --local-dir models/Kairos-model/kairos-sensenova-4B-720P 
+
+# 4B-robot
+modelscope download kairos-team/kairos-sensenova-robot-4B-480P \
+  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P
+
+# 4B-robot distilled
+modelscope download kairos-team/kairos-sensenova-robot-4B-480P-distilled \
+  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
+
+```
+### 6.3 Run Inference
+```bash
+# Step1: Fetch the Model
+pip install -U huggingface_hub 
+mkdir -p models/Qwen models/Wan2.1-T2V-14B
 
 # Download Qwen2.5-VL for Text-Encoder
 hf download Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
