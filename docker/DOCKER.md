@@ -19,6 +19,7 @@ Official images are hosted on GitHub Container Registry (GHCR).
 | ---------------------------------------------------- | ----------------------------------- |
 | `ghcr.io/kairos-agi/kairos-sensenova:v0.0.1`         |  For A800 / A100 |
 | `ghcr.io/kairos-agi/kairos-sensenova:v0.0.1-rtx5090` |  For RTX 5090    |
+| `ghcr.io/kairos-agi/kairos-sensenova:v0.0.1-metax`   |  For MetaxC500 / C550 |
 
 Platform: Linux (CUDA-enabled)
 
