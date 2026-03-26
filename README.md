@@ -250,19 +250,19 @@ pip install modelscope
 # Download kairos model
 # 4B-480P
 modelscope download kairos-team/kairos-sensenova-4B-480P-pretrained \
-  --local-dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
+  --local_dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
 
 # 4B-720P
 modelscope download kairos-team/kairos-sensenova-4B-720P \
-  --local-dir models/Kairos-model/kairos-sensenova-4B-720P 
+  --local_dir models/Kairos-model/kairos-sensenova-4B-720P 
 
 # 4B-robot
 modelscope download kairos-team/kairos-sensenova-robot-4B-480P \
-  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P
+  --local_dir models/kairos-model/kairos-sensenova-robot-4B-480P
 
 # 4B-robot distilled
 modelscope download kairos-team/kairos-sensenova-robot-4B-480P-distilled \
-  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
+  --local_dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
 
 ```
 ### 6.3 Run Inference
