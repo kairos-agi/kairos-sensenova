@@ -201,9 +201,20 @@ cd kairos-sensenova
 # 2) Build the environment from requirements with conda or venv
 
 # 1) Docker image:
+# Note:
+# Please select the Docker image that matches your GPU platform.
+# The default image is for A800 / A100, while RTX 5090 requires the -rtx5090 image tag, and METAX C500 requires the -metax tag.
+
 # Pull the Docker image
-echo ghp_xxxxxxxxxxxxxxxxx | docker login ghcr.io -u username --password-stdin
+# For A800 / A100
+echo "$GHCR_TOKEN" | docker login ghcr.io -u username --password-stdin
 docker pull ghcr.io/kairos-agi/kairos-sensenova:v0.0.1
+
+# For RTX 5090
+# docker pull ghcr.io/kairos-agi/kairos-sensenova:v0.0.1-rtx5090
+
+# For METAX C500
+# docker pull ghcr.io/kairos-agi/kairos-sensenova:v0.0.1-metax
 
 # Create a container using Docker
 docker run --rm -it \
@@ -212,20 +223,33 @@ docker run --rm -it \
   ghcr.io/kairos-agi/kairos-sensenova:v0.0.1 \
   bash
 
+# For RTX 5090
+# docker run --rm -it \
+#   --gpus all \
+#   -v $(pwd):/workspace \
+#   ghcr.io/kairos-agi/kairos-sensenova:v0.0.1-rtx5090 \
+#   bash
 
-# 2) requirments
-# build a python environment with python>=3.10 && torch>=2.6 && cuda>=12.6
+# For METAX C500
+# docker run --rm -it \
+#   --gpus all \
+#   -v $(pwd):/workspace \
+#   ghcr.io/kairos-agi/kairos-sensenova:v0.0.1-metax \
+#   bash
+
+# 2) Requirements
+# build a python environment with python>=3.10, torch>=2.6, and cuda>=12.6
 # install requirements
+# Note: METAX C500 is not supported in this setup method. For METAX C500, please use the Docker image only.
 pip install -r requirements.txt
 ```
 
-### 6.2 Download Models
+### 6.2 Download Kairos Models
 
 - Download with huggingface
 ```bash
 pip install -U huggingface_hub 
 
-# Download kairos model
 # 4B-480P
 hf download kairos-agi/kairos-sensenova-4B-480P-pretrained \
   --local-dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
@@ -236,18 +260,17 @@ hf download kairos-agi/kairos-sensenova-4B-720P \
 
 # 4B-robot
 hf download kairos-agi/kairos-sensenova-robot-4B-480P \
-  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P
+  --local-dir models/Kairos-model/kairos-sensenova-robot-4B-480P
 
 # 4B-robot distilled
 hf download kairos-agi/kairos-sensenova-robot-4B-480P-distilled \
-  --local-dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
+  --local-dir models/Kairos-model/kairos-sensenova-robot-4B-480P-distilled
 
 ```
 - Download with modelscope
 ```bash
 pip install modelscope
 
-# Download kairos model
 # 4B-480P
 modelscope download kairos-team/kairos-sensenova-4B-480P-pretrained \
   --local_dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
@@ -258,16 +281,18 @@ modelscope download kairos-team/kairos-sensenova-4B-720P \
 
 # 4B-robot
 modelscope download kairos-team/kairos-sensenova-robot-4B-480P \
-  --local_dir models/kairos-model/kairos-sensenova-robot-4B-480P
+  --local_dir models/Kairos-model/kairos-sensenova-robot-4B-480P
 
 # 4B-robot distilled
 modelscope download kairos-team/kairos-sensenova-robot-4B-480P-distilled \
-  --local_dir models/kairos-model/kairos-sensenova-robot-4B-480P-distilled
+  --local_dir models/Kairos-model/kairos-sensenova-robot-4B-480P-distilled
 
 ```
 ### 6.3 Run Inference
 ```bash
-# Step1: Fetch the Model
+Note: Please complete Section 6.2 first to download the Kairos model weights.
+
+# Step1: Download additional dependencies for inference
 mkdir -p models/Qwen models/Wan2.1-T2V-14B
 
 # Download Qwen2.5-VL for Text-Encoder
@@ -275,7 +300,7 @@ hf download Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
   --local-dir models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
   --include "*.safetensors"  
   
-# Dowload Wan2.1-VAE for VAE-Encoder/Decoder
+# Download Wan2.1-VAE for VAE-Encoder/Decoder
 hf download Wan-AI/Wan2.1-T2V-14B \
   --local-dir models/Wan2.1-T2V-14B \
   --include "Wan2.1_VAE.pth"  
