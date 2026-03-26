@@ -5,7 +5,7 @@
 <p>
 
 <p align="center">
-    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/kairos-agi">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
+    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/collections/kairos-agi/kairos30">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/collections/kairos-team/kairos30">Model Scope</a>&nbsp&nbsp| &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
 
 -----
 **Kairos 3.0** is grounded in physical laws as its cognitive foundation, establishing a unified cross-embodiment world modeling framework. Featuring a 4B-parameter architecture with a custom hybrid linear attention operator, it unifies multimodal understanding, generation, and action prediction for real-time edge deployment. By achieving physics-level deep cognition and low-latency inference, it empowers high-precision action prediction and HD generation for both physical and digital embodied AI applications.
@@ -70,12 +70,12 @@ Unified Cross-Embodied Generation: A single "brain" that generalizes across sing
 Real-time Edge Performance: Industry-leading inference speed with ultra-low resource consumption. Optimized for low-latency, high-reliability deployment across single or multi-GPU embodied systems.
 
 ## 📦 4. Model Zoo
-| Model Version | Resolution | Use cases | Highlights |
+| Download Links | Model Version | Use cases | Highlights |
 |:---:|:---:|:---:|:---:|
-| [kairos-4B 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/common/kairos-common-4B-480P-16fps.safetensors) | 480P | 480p general pretrained model | 480p pretrained model for downstream fine-tuning. |
-| [kairos-4B-robot 480p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/robot/kairos-robot-4B-480P-16fps.safetensors) | 480P | Robot manipulation & real-world closed-loop control | Specialized for embodied AI; leading accuracy on PAI-Bench |
-| [kairos-4B-robot 480p distillation](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/robot/kairos-robot-4B-480P-16fps-distilled.safetensors) | 480P | On-robot Integration、Edge Computing、Low-power Efficiency | Ultra-lightweight via distillation; enables real-time inference on embedded/edge devices. |
-| [kairos-4B 720p](https://huggingface.co/kairos-agi/kairos-sensenova-common/blob/main/models/common/kairos-common-4B-720P-16fps.safetensors) | 720P | HD visual generation & complex physical reasoning | Supports 720P HD output with enhanced fine-grained detail capture. |
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-4B-480P-pretrained)  🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-4B-480P-pretrained) | kairos-4B-480P | 480p general pretrained model | 480p pretrained model for downstream fine-tuning. |
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-robot-4B-480P) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-robot-4B-480P) | kairos-4B-robot-480P | Robot manipulation & real-world closed-loop control | Specialized for embodied AI; leading accuracy on PAI-Bench |
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-robot-4B-480P-distilled) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-robot-4B-480P-distilled) | kairos-4B-robot-480P-distillation | On-robot Integration、Edge Computing、Low-power Efficiency | Ultra-lightweight via distillation; enables real-time inference on embedded/edge devices. |
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-4B-720P) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-4B-720P)| kairos-4B-720p | HD visual generation & complex physical reasoning | Supports 720P HD output with enhanced fine-grained detail capture. |
 
 ## 📈5. Evaluation 
 ### 🎯 5.1 Accuracy Benchmarks
@@ -226,10 +226,22 @@ pip install -U huggingface_hub
 mkdir -p models/Kairos models/Qwen models/Wan2.1-T2V-14B
 
 # Download kairos model
-hf download kairos-agi/kairos-sensenova-common \
-  --local-dir models/Kairos \
-  --include "*.safetensors"
-  
+# 480P
+hf download kairos-sensenova-4B-480P-pretrained \
+  --local-dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
+
+# 720P
+hf download kairos-agi/kairos-sensenova-4B-720P \
+  --local-dir models/Kairos-model/kairos-sensenova-4B-720P 
+
+# 4B-robot
+hf download kairos-agi/kairos-sensenova-robot-4B-480P \
+  --local-dir models/kairos-agi/kairos-sensenova-robot-4B-480P
+
+# 4B-robot distilled
+hf download kairos-agi/kairos-sensenova-robot-4B-480P-distilled \
+  --local-dir models/kairos-agi/kairos-sensenova-robot-4B-480P-distilled
+
 # Download Qwen2.5-VL for Text-Encoder
 hf download Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
   --local-dir models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
