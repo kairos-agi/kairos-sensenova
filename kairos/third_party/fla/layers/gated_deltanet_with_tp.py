@@ -17,6 +17,7 @@ from kairos.third_party.fla.modules import FusedRMSNormGated, RMSNorm, ShortConv
 from kairos.third_party.fla.ops.gated_delta_rule import chunk_gated_delta_rule, fused_recurrent_gated_delta_rule
 from kairos.modules.utils.linear import ColumnParallelLinear, RowParallelLinear
 from kairos.modules.utils import parallel_state
+from kairos.modules.utils.tp_utils import _distribute_input_sp, build_tp_chunk_list
 
 if TYPE_CHECKING:
     from transformers.processing_utils import Unpack
@@ -29,48 +30,58 @@ def _all2all_head_to_seq(x: torch.Tensor, context_group, tp_chunk_list):
 
     tp_chunk_list holds per-rank head counts: identical entries => balanced path; otherwise =>
     unbalanced path (pad to max for all_to_all, then trim to the true local chunk).
+
+    If seq length T is not divisible by world size, pad seq to the next multiple of world,
+    run the original all_to_all path, and KEEP the padded local seq length.
+    The padded tokens should be trimmed later after seq gather / final output reconstruction.
     """
     if not dist.is_available() or not dist.is_initialized():
         return x
+
     group = context_group
     world = dist.get_world_size(group=group) if group is not None else dist.get_world_size()
     if world <= 1:
         return x
+
     B, T, H_local, D = x.shape
+    rank = dist.get_rank(group=group) if group is not None else dist.get_rank()
 
-    rank = dist.get_rank(group=group) if group is not None else 0
-    # rank = dist.get_rank(group=group) if group is not None else dist.get_rank(group=group)
-
-    # pad to max_h_local in head dim
+    # 1) pad head dim to max_h_local
     max_h_local = max(tp_chunk_list)
-    assert max_h_local >= H_local and H_local == tp_chunk_list[rank], (f"UnbalanceAll2AllHeadToSeqFn: H_local={H_local} != tp_chunk_list[rank]={tp_chunk_list[rank]}")
+    assert max_h_local >= H_local and H_local == tp_chunk_list[rank], (
+        f"UnbalanceAll2AllHeadToSeqFn: H_local={H_local} != tp_chunk_list[{rank}]={tp_chunk_list[rank]}"
+    )
+
     if H_local < max_h_local:
-        pad_shape = list(x.shape)
-        pad_shape[2] = max_h_local - H_local
-        zeros = torch.zeros(pad_shape, dtype=x.dtype, device=x.device)
+        pad_h = max_h_local - H_local
+        zeros = torch.zeros(B, T, pad_h, D, dtype=x.dtype, device=x.device)
         x = torch.cat([x, zeros], dim=2)
-        H_local = max_h_local # update H_local to max_h_local
+        H_local = max_h_local
 
-    if T % world != 0:
-        x_resh = x.reshape(B * T, H_local, D)
-        # gathered = _UnbalanceGatherForwardSplitBackward.apply(x_resh, tp_chunk_list, group)
-        gathered = _gather_input(x_resh, group)
-        h_full = gathered.shape[1]
-        return gathered.reshape(B, T, h_full, D)
+    # 2) pad seq dim to be divisible by world
+    pad_t = (world - (T % world)) % world
+    if pad_t > 0:
+        zeros = torch.zeros(B, pad_t, H_local, D, dtype=x.dtype, device=x.device)
+        x = torch.cat([x, zeros], dim=1)
+        T = T + pad_t
 
+    # 3) original all_to_all path
     T_local = T // world
-    input_tensors = [x[:, r * T_local:(r + 1) * T_local, :, :].contiguous() for r in range(world)]
+    input_tensors = [
+        x[:, r * T_local:(r + 1) * T_local, :, :].contiguous()
+        for r in range(world)
+    ]
     output_tensors = [torch.empty_like(input_tensors[0]) for _ in range(world)]
 
     dist.all_to_all(output_tensors, input_tensors, group=group)
-    # out = torch.cat(output_tensors, dim=2)
 
-    # Trim output_tensors based on tp_chunk_list to remove padding.
+    # 4) trim head padding only
     cleaned_tensors = []
     for r in range(world):
         real_h = tp_chunk_list[r]
         cleaned_tensors.append(output_tensors[r][:, :, :real_h, :])
-    out = torch.cat(cleaned_tensors, dim=2)
+
+    out = torch.cat(cleaned_tensors, dim=2)   # [B, padded_T/world, H_full, D]
 
     return out
 
@@ -268,11 +279,11 @@ class GatedDeltaNet(nn.Module):
         self.tp_size = parallel_state.get_context_parallel_world_size()
 
         if num_heads == num_v_heads:
-            self.tp_chunk_list = self._build_tp_chunk_list(self.num_heads, self.tp_size)
+            self.tp_chunk_list = build_tp_chunk_list(self.num_heads, self.tp_size)
             self.tp_chunk_list_qk = self.tp_chunk_list
         else:
-            self.tp_chunk_list_qk = self._build_tp_chunk_list(self.num_heads, self.tp_size)
-            self.tp_chunk_list = self._build_tp_chunk_list(self.num_v_heads, self.tp_size)
+            self.tp_chunk_list_qk = build_tp_chunk_list(self.num_heads, self.tp_size)
+            self.tp_chunk_list = build_tp_chunk_list(self.num_v_heads, self.tp_size)
 
         if self.tp_chunk_list is None:
             raise ValueError("tp_chunk_list must not be None (expected explicit per-rank head splits).")
@@ -389,21 +400,16 @@ class GatedDeltaNet(nn.Module):
                 "ShortConvolution is crucial to the performance. "
                 "Do not turn it off, i.e., setting `use_short_conv=False` unless you know what you are doing."
             )
+        self.hidden_size = hidden_size
         if use_gate:
-            if self.tp_num_splits <= 1:
-                self.g_proj = nn.Linear(hidden_size, self.value_dim, bias=False)
-            else:
+            if self.tp_size > 4:
                 self.g_proj = ColumnParallelLinear(hidden_size, self.value_dim, bias=False, tp_chunk_list=self.tp_chunk_list)
-
+            else:
+                self.g_proj = nn.Linear(hidden_size, self.value_dim, bias=False)
             self.o_norm = FusedRMSNormGated(self.head_v_dim, eps=norm_eps)
         else:
             self.o_norm = RMSNorm(self.head_v_dim, eps=norm_eps)
         self.o_proj = nn.Linear(self.value_dim, hidden_size, bias=False)
-
-    def _build_tp_chunk_list(self, num_heads, tp_size):
-        base = num_heads // tp_size
-        rem = num_heads % tp_size
-        return [base + (1 if r < rem else 0) for r in range(tp_size)]
 
     def forward(
         self,
@@ -468,14 +474,9 @@ class GatedDeltaNet(nn.Module):
                 if self.save: torch.save({"conv_state_q": conv_state_q.cpu(), "conv_state_k": conv_state_k.cpu(), "conv_state_v": conv_state_v.cpu()}, f"saved_tensors/gated-conv_state_{self.chunk_step}-{rank}.pt")
 
         else:
-            if not getattr(self, '_tp_enabled', False):
-                q = F.silu(self.q_proj(hidden_states))
-                k = F.silu(self.k_proj(hidden_states))
-                v = F.silu(self.v_proj(hidden_states))
-            else:
-                q = F.silu(self.q_proj(hidden_states))
-                k = F.silu(self.k_proj(hidden_states))
-                v = F.silu(self.v_proj(hidden_states))
+            q = F.silu(self.q_proj(hidden_states))
+            k = F.silu(self.k_proj(hidden_states))
+            v = F.silu(self.v_proj(hidden_states))
 
         q, k = map(lambda x: rearrange(x, '... (h d) -> ... h d', d=self.head_k_dim), (q, k))
         v = rearrange(v, '... (h d) -> ... h d', d=self.head_v_dim)
@@ -545,9 +546,7 @@ class GatedDeltaNet(nn.Module):
                 h_local = H_local
                 h0, h1 = rank * h_local, (rank + 1) * h_local
 
-            init_i = None
-            if recurrent_state is not None:
-                init_i = recurrent_state[:, h0:h1, :, :]
+            init_i = recurrent_state
 
             # shape: [batch, seq, head]
             g = g[:, :, h0:h1].contiguous()
@@ -582,7 +581,6 @@ class GatedDeltaNet(nn.Module):
 
             # reshape to [B*T, H_local, D] for gather implementation
             b, t, h_loc, d = o_local.shape
-            # world_size = dist.get_world_size() if (dist.is_available() and dist.is_initialized()) else 1
             if world_size > 1:
                 # head->seq: [B, T, H_local, D] -> [B, T_local, H_full, D]
                 o_seq = _all2all_head_to_seq(o_local, self.tp_group, self.tp_chunk_list)
@@ -590,10 +588,10 @@ class GatedDeltaNet(nn.Module):
                 o_seq = o_local
             if self.save: torch.save({"output": o_seq.cpu()}, f"saved_tensors/gated-output_{self.chunk_step}-{rank}.pt")
 
-
             # Gather final recurrent states if requested
             if final_local is not None:
-                recurrent_state = _unbalance_gather_input(final_local, self.tp_chunk_list, self.tp_group)
+                # recurrent_state = _unbalance_gather_input(final_local, self.tp_chunk_list, self.tp_group)
+                recurrent_state = final_local
                 if self.save: torch.save({"recurrent_state": recurrent_state.cpu()}, f"saved_tensors/recurrent_state_{self.chunk_step}-{rank}.pt")
             else:
                 recurrent_state = None
@@ -609,54 +607,35 @@ class GatedDeltaNet(nn.Module):
         # o_norm may not support tensor-parallel execution or lower precision.
         # Cast to float32 (single precision) for normalization then cast back.
         if self.use_gate:
-            # Compute gating for o_norm. If TP enabled, compute local gating and
-            # all_gather to form the full gating tensor required by o_norm.
+            # Compute gating for o_norm.
+            # - seq-parallel path: split sequence only and keep full heads locally
+            # - head-parallel path: compute local head shard and transpose to seq layout
             if not getattr(self, '_tp_enabled', False):
                 g_norm = rearrange(self.g_proj(hidden_states), '... (h d) -> ... h d', d=self.head_v_dim)
+                o = self.o_norm(o, g_norm)
             else:
-                # local gating
-                g_local = self.g_proj(hidden_states)
-                
-                # all_gather to form full gating
-                world_size = dist.get_world_size(self.tp_group) if (dist.is_available() and dist.is_initialized()) else 1
-                if world_size > 1:
+                if self.tp_size <= 4:
+                    # local gating
+                    hidden_states_local = _distribute_input_sp(hidden_states, self.tp_group)
+                    g_local = self.g_proj(hidden_states_local)
+                else:
+                    g_local = self.g_proj(hidden_states)
                     # g_local shaped [B, T, H_local * head_v_dim]
                     b, t, ld = g_local.shape
                     h_loc = ld // self.head_v_dim
                     # reshape to [B, T, H_local, D]
-                    g_local_4 = rearrange(g_local, 'b t (h d) -> b t h d', h=h_loc, d=self.head_v_dim)
+                    g_local = rearrange(g_local, 'b t (h d) -> b t h d', h=h_loc, d=self.head_v_dim)
                     # perform head->seq transpose directly
-                    g_seq = _all2all_head_to_seq(g_local_4, self.tp_group, self.tp_chunk_list)
-                    # flattened full gating for later use if needed
-                    g_full = rearrange(g_seq, 'b t h d -> b t (h d)')
-                else:
-                    g_full = g_local
-                g_norm = rearrange(g_full, '... (h d) -> ... h d', d=self.head_v_dim)
-
-            if self.save: torch.save({"g_norm": g_norm.cpu()}, f"saved_tensors/gated-g_norm_{self.chunk_step}-{rank}.pt")
-
-            # Determine distributed world size
-            world_size = dist.get_world_size(self.tp_group) if (dist.is_available() and dist.is_initialized()) else 1
-            if world_size > 1:
-                # determine gating sequence layout (g_seq). If g_seq was
-                # produced earlier, reuse it; otherwise build from g_full.
-                if g_seq is None:
-                    g_full_4 = rearrange(g_full, 'b t (h d) -> b t h d', d=self.head_v_dim)
-                    g_seq_final = _all2all_head_to_seq(g_full_4, self.tp_group, self.tp_chunk_list)
-                else:
-                    g_seq_final = g_seq
-                # choose input for norm: prefer o_seq (head->seq result) when available
-                o_in = o_seq if 'o_seq' in locals() else o
-                o_seq_norm = self.o_norm(o_in, g_seq_final, tp_group=self.tp_group)
+                    g_local = _all2all_head_to_seq(g_local, self.tp_group, self.tp_chunk_list)
+                if g_local.dim() == 3:
+                    g_local = rearrange(g_local, '... (h d) -> ... h d', d=self.head_v_dim)
+                g_norm = g_local
+                o_seq_norm = self.o_norm(o_seq, g_norm, tp_group=self.tp_group)
                 o_flat = rearrange(o_seq_norm, 'b t h d -> b t (h d)')
                 o = self.o_proj(o_flat)
-                if self.save: torch.save({"o_norm": o.cpu()}, f"saved_tensors/gated-o_norm_{self.chunk_step}-{rank}.pt")
-            else:
-                # single-rank case: normal path
-                o = self.o_norm(o, g_norm)
-                if self.save: torch.save({"o_norm": o.cpu()}, f"saved_tensors/gated-o_norm_{self.chunk_step}-{rank}.pt")
         else:
-            o = self.o_norm(o)
+            o_base = o if not self._tp_enabled else o_seq
+            o = self.o_norm(o_base)
         if o.dim() == 4:
             o = rearrange(o, 'b t h d -> b t (h d)')
             o = self.o_proj(o)
@@ -666,9 +645,5 @@ class GatedDeltaNet(nn.Module):
             o = pad_input(o.squeeze(0), indices, batch_size, q_len)
 
         self.chunk_step += 1
-
-        if world_size > 1:            
-            o_gatherd = _gather_input(o, self.tp_group)
-            return o_gatherd, None, past_key_values
 
         return o, None, past_key_values

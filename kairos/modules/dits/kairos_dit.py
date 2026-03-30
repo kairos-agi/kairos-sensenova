@@ -605,6 +605,29 @@ class GateModule(nn.Module):
     def forward(self, x, gate, residual):
         return x + gate * residual
 
+def _broadcast_from_owner(x_chunk, owner_rank, chunk_shape, dtype, device, group):
+    rank = dist.get_rank(group)
+    if rank != owner_rank:
+        x_chunk = torch.empty(chunk_shape, device=device, dtype=dtype)
+    dist.broadcast(x_chunk, src=owner_rank, group=group)
+    return x_chunk
+
+
+def _get_owner_chunk_info(chunk_id, chunk_size, local_seq_len):
+    global_start = chunk_id * chunk_size
+    owner_rank = global_start // local_seq_len
+    owner_local_start = global_start % local_seq_len
+    owner_local_end = owner_local_start + chunk_size
+    return owner_rank, owner_local_start, owner_local_end
+
+def _all_gather_seq_chunk(o_seq_part, group, q_len=None):
+    world_size = dist.get_world_size(group)
+    gather_list = [torch.empty_like(o_seq_part) for _ in range(world_size)]
+    dist.all_gather(gather_list, o_seq_part.contiguous(), group=group)
+    out = torch.cat(gather_list, dim=1).contiguous()
+    if q_len is not None and out.shape[1] > q_len:
+        out = out[:, :q_len, :]
+    return out
 
 class DiTBlock(nn.Module):
     def __init__(self, 
@@ -641,9 +664,9 @@ class DiTBlock(nn.Module):
         self.use_tp_in_self_attn = use_tp_in_self_attn
 
         dist_on = dist.is_available() and dist.is_initialized()
-        world = dist.get_world_size() if dist_on else 1
+        self.world = dist.get_world_size() if dist_on else 1
 
-        if world > 1 and (self.use_seq_parallel or use_tp_in_getaeddeltanet or use_tp_in_self_attn):
+        if self.world > 1 and (self.use_seq_parallel or use_tp_in_getaeddeltanet or use_tp_in_self_attn):
             self.context_group_rank = parallel_state.get_context_parallel_rank()
             self.context_group_size = parallel_state.get_context_parallel_world_size()
             self.context_group = parallel_state.get_context_parallel_group()
@@ -659,7 +682,7 @@ class DiTBlock(nn.Module):
             assert gateddeltanet_layer_idx >= 0
 
             # getaeddeltanet用tp并行
-            if self.use_tp_in_getaeddeltanet and world > 1:
+            if self.use_tp_in_getaeddeltanet and self.world > 1:
                 self.gated_delta = GatedDeltaNetWithTP(
                     hidden_size=dim,
                     num_heads=num_heads,
@@ -680,7 +703,7 @@ class DiTBlock(nn.Module):
                                                 )
         else:
             assert gateddeltanet_layer_idx == -1
-            if self.use_tp_in_self_attn and world > 1:
+            if self.use_tp_in_self_attn and self.world > 1:
                 # self_attention用tp并行
                 if attend_k0:
                     raise NotImplementedError('SelfAttentionTP not support attend_k0 yet!!!')
@@ -736,29 +759,81 @@ class DiTBlock(nn.Module):
         # self-attention
         input_x_local = modulate(self.self_attn_norm(x), shift_msa, scale_msa)
         del scale_msa, shift_msa
+        world_size = self.world
         if self.use_linear_attn:
-            chunk_size = 40768 // 7
-            input_x = _gather_input_sp(input_x_local, self.context_group)
-            if input_x.shape[1] > chunk_size:
-                cache = fla_Cahce.from_legacy_cache()
-                outputs = []
-                for start in range(0, input_x.shape[1], chunk_size):
-                    x_chunk = input_x[:, start:start+chunk_size, :]
-                    # if start == 0:
-                    #     past_key_values = None
+            rank = getattr(self, "context_group_rank", 0)
+
+            if world_size > 1 and (not dist.is_available() or not dist.is_initialized()):
+                raise RuntimeError("Distributed must be initialized for multi-rank linear_attn path.")
+
+            B, local_seq_len, hidden_dim = input_x_local.shape
+
+            if world_size > 1:
+                chunk_size = local_seq_len
+            else:
+                assert local_seq_len >= 8 and local_seq_len % 8 == 0, \
+                    f"single-card path requires local_seq_len divisible by 8, got {local_seq_len}"
+                chunk_size = local_seq_len // 8
+
+            assert local_seq_len % chunk_size == 0, \
+                f"chunk_size={chunk_size} must divide local_seq_len={local_seq_len}"
+
+            total_seq_len = local_seq_len * world_size
+            num_chunks = total_seq_len // chunk_size
+
+            attn_out_local = torch.empty_like(input_x_local)
+            cache = fla_Cahce.from_legacy_cache()
+
+            for chunk_id in range(num_chunks):
+                if world_size > 1:
+                    owner_rank, owner_local_start, owner_local_end = _get_owner_chunk_info(
+                        chunk_id=chunk_id,
+                        chunk_size=chunk_size,
+                        local_seq_len=local_seq_len
+                    )
+
+                    if rank == owner_rank:
+                        x_chunk = input_x_local[:, owner_local_start:owner_local_end, :].contiguous()
+                    else:
+                        x_chunk = None
+
+                    x_chunk = _broadcast_from_owner(
+                        x_chunk=x_chunk,
+                        owner_rank=owner_rank,
+                        chunk_shape=(B, chunk_size, hidden_dim),
+                        dtype=input_x_local.dtype,
+                        device=input_x_local.device,
+                        group=self.context_group,
+                    )
 
                     out_chunk, _, cache = self.gated_delta(
                         x_chunk,
                         past_key_values=cache,
                         use_cache=True
                     )
-                    outputs.append(out_chunk)
-                attn_out = torch.cat(outputs, dim=1)
-            else:
-                attn_out, _, _ = self.gated_delta(input_x)
-            attn_out = _distribute_input_sp(attn_out, self.context_group)
+
+                    o_seq_chunk = _all_gather_seq_chunk(out_chunk, self.context_group,  q_len=x_chunk.shape[1])
+
+                    if rank == owner_rank:
+                        attn_out_local[:, owner_local_start:owner_local_end, :] = o_seq_chunk
+
+                else:
+                    start = chunk_id * chunk_size
+                    end = start + chunk_size
+                    x_chunk = input_x_local[:, start:end, :].contiguous()
+
+                    out_chunk, _, cache = self.gated_delta(
+                        x_chunk,
+                        past_key_values=cache,
+                        use_cache=True
+                    )
+
+                    attn_out_local[:, start:end, :] = out_chunk
+
+            attn_out = attn_out_local
         else:
             attn_out = self.self_attn(input_x_local, f, freqs, L=L)
+
         x = self.gate(x, gate_msa, attn_out)
         del gate_msa, attn_out
         # cross-attention
