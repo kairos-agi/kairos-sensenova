@@ -306,12 +306,19 @@ hf download Wan-AI/Wan2.1-T2V-14B \
   --include "Wan2.1_VAE.pth"  
 
 # Step2: Run the examples
+# The example JSON files provided here are intended for the
+# `kairos-sensenova-robot-4B-480P-distilled` model.
+#
+# For TI2V and I2V, please use the 480P JSON configs. This distilled model is
+# optimized for 480P, and its performance at 720P is not ideal.
+#
+# For other models and the matching configs, please refer to `docs/QUICKSTART.md`.
 # Text2Video
-bash examples/inference.sh examples/example_t2v.json
+bash examples/inference.sh examples/example_t2v_480P.json
 # Text&FirstImage2Video
-bash examples/inference.sh examples/example_ti2v.json
+bash examples/inference.sh examples/example_ti2v_480P.json
 # FirstImage2Video
-bash examples/inference.sh examples/example_i2v.json
+bash examples/inference.sh examples/example_i2v_480P.json
 ```
 
 ## 👥 7. About Us

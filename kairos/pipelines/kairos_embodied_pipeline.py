@@ -21,6 +21,7 @@ from kairos.apis.builder import KAIROS_PROCESSOR
 import torch.distributed as dist
 from kairos.modules.utils import parallel_state
 from kairos.modules.vaes.parallel_vae_wrapper import ParallelVAEWrapper
+from kairos.modules.utils.tp_utils import _gather_input_sp, _distribute_input_sp
 
 @KAIROS_PROCESSOR.register_module()
 class KairosEmbodiedPipeline(BasePipeline):
@@ -1077,19 +1078,53 @@ def model_fn_wan_video(
             batch_size=2 if cfg_merge else 1
         )
 
-
     # Timestep
-    if dit.seperated_timestep and fuse_vae_embedding_in_latents:
-        timestep = torch.concat([
-            torch.zeros((1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device),
-            torch.ones((latents.shape[2] - 1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device) * timestep
-        ]).flatten()
-        t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep).unsqueeze(0))
-        t_mod = dit.time_projection(t).unflatten(2, (6, dit.dim))
+    if use_unified_sequence_parallel:
+        cp_world_size = parallel_state.get_context_parallel_world_size()
     else:
-        t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep))
-        t_mod = dit.time_projection(t).unflatten(1, (6, dit.dim))
+        cp_world_size = 0
 
+    if cp_world_size > 1:
+        cp_rank = parallel_state.get_context_parallel_rank()
+        tokens_per_frame = latents.shape[3] * latents.shape[4] // 4
+        num_frames = latents.shape[2]
+        total_tokens = num_frames * tokens_per_frame
+
+        if total_tokens % cp_world_size != 0:
+            raise ValueError(
+                f"total_tokens={total_tokens} must be divisible by cp_world_size={cp_world_size}"
+            )
+
+        local_tokens = total_tokens // cp_world_size
+        start = cp_rank * local_tokens
+        end = start + local_tokens
+
+        if dit.seperated_timestep and fuse_vae_embedding_in_latents:
+            global_token_idx = torch.arange(start, end, device=latents.device)
+            frame_idx = global_token_idx // tokens_per_frame
+
+            timestep_local = torch.where(
+                frame_idx == 0,
+                torch.zeros((), dtype=latents.dtype, device=latents.device),
+                torch.as_tensor(timestep, dtype=latents.dtype, device=latents.device),
+            )
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep_local).unsqueeze(0))
+            t_mod = dit.time_projection(t).unflatten(2, (6, dit.dim))
+        else:
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep))
+            t_mod = dit.time_projection(t).unflatten(1, (6, dit.dim))
+    else:
+        if dit.seperated_timestep and fuse_vae_embedding_in_latents:
+            timestep = torch.concat([
+                torch.zeros((1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device),
+                torch.ones((latents.shape[2] - 1, latents.shape[3] * latents.shape[4] // 4), dtype=latents.dtype, device=latents.device) * timestep
+            ]).flatten()
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep).unsqueeze(0))
+            t_mod = dit.time_projection(t).unflatten(2, (6, dit.dim))
+        else:
+            t = dit.time_embedding(sinusoidal_embedding_1d(dit.freq_dim, timestep))
+            t_mod = dit.time_projection(t).unflatten(1, (6, dit.dim))
+    
     # Motion Controller
     if motion_bucket_id is not None and motion_controller is not None:
         t_mod = t_mod + motion_controller(motion_bucket_id).unflatten(1, (6, dit.dim))
@@ -1115,8 +1150,6 @@ def model_fn_wan_video(
     # Merged cfg
     if x.shape[0] != context.shape[0]:
         x = torch.concat([x] * context.shape[0], dim=0)
-    if timestep.shape[0] != context.shape[0]:
-        timestep = torch.concat([timestep] * context.shape[0], dim=0)
 
     # Image Embedding
     if y is not None and dit.require_vae_embedding:
@@ -1127,6 +1160,40 @@ def model_fn_wan_video(
 
     # Add camera control
     x, (f, h, w) = dit.patchify(x, control_camera_latents_input)
+    if use_unified_sequence_parallel and cp_world_size > 1:
+        x_full = rearrange(x, 'b c f h w -> b (f h w) c')
+        x = _distribute_input_sp(x_full, parallel_state.get_context_parallel_group())
+        del x_full
+        total_tokens = f * h * w
+        assert total_tokens % cp_world_size == 0
+
+        local_tokens = total_tokens // cp_world_size
+        start = cp_rank * local_tokens
+        end = start + local_tokens
+
+        global_token_idx = torch.arange(start, end, device=x.device)
+
+        frame_idx = global_token_idx // (h * w)
+        rem = global_token_idx % (h * w)
+        h_idx = rem // w
+        w_idx = rem % w
+
+        freq_f_table = dit.freqs[0] if dit.freqs[0].device == x.device else dit.freqs[0].to(x.device)
+        freq_h_table = dit.freqs[1] if dit.freqs[1].device == x.device else dit.freqs[1].to(x.device)
+        freq_w_table = dit.freqs[2] if dit.freqs[2].device == x.device else dit.freqs[2].to(x.device)
+
+        freqs = torch.cat([
+            freq_f_table.index_select(0, frame_idx),
+            freq_h_table.index_select(0, h_idx),
+            freq_w_table.index_select(0, w_idx),
+        ], dim=-1).unsqueeze(1)   # [local_tokens, 1, dim]
+    else:
+        x = rearrange(x, 'b c f h w -> b (f h w) c').contiguous()
+        freqs = torch.cat([
+            dit.freqs[0][:f].view(f, 1, 1, -1).expand(f, h, w, -1),
+            dit.freqs[1][:h].view(1, h, 1, -1).expand(f, h, w, -1),
+            dit.freqs[2][:w].view(1, 1, w, -1).expand(f, h, w, -1)
+        ], dim=-1).reshape(f * h * w, 1, -1).to(x.device)
     grid_size = (f, h, w)
 
     # Reference image
@@ -1136,12 +1203,6 @@ def model_fn_wan_video(
         reference_latents = dit.ref_conv(reference_latents).flatten(2).transpose(1, 2)
         x = torch.concat([reference_latents, x], dim=1)
         f += 1
-
-    freqs = torch.cat([
-        dit.freqs[0][:f].view(f, 1, 1, -1).expand(f, h, w, -1),
-        dit.freqs[1][:h].view(1, h, 1, -1).expand(f, h, w, -1),
-        dit.freqs[2][:w].view(1, 1, w, -1).expand(f, h, w, -1)
-    ], dim=-1).reshape(f * h * w, 1, -1).to(x.device)
 
     # TeaCache
     if tea_cache is not None:
@@ -1185,7 +1246,6 @@ def model_fn_wan_video(
             tea_cache.store(x)
 
     x = dit.head(x, t)
-
     # Remove reference latents
     if reference_latents is not None:
         x = x[:, reference_latents.shape[1]:]

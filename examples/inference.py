@@ -17,6 +17,11 @@ from kairos.modules.utils import save_video, save_image, parallel_state, FLAGS_K
 def parse_args():
     parser = argparse.ArgumentParser(description='TRAIN_MODEL_LOOP')
     parser.add_argument('--input_file', default='', help='input_file')
+    parser.add_argument(
+        '--config_file',
+        default='kairos/configs/kairos_4b_config_DMD.py',
+        help='path to config file'
+    )
 
     args = parser.parse_args()
 
@@ -75,7 +80,7 @@ if __name__ == '__main__':
 
     args = parse_args()
 
-    cfg_path = "kairos/configs/kairos_4b_config_DMD.py"
+    cfg_path = args.config_file
 
     if cfg_path == '':
         ValueError('config path is empty')

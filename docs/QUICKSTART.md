@@ -91,9 +91,17 @@ snapshot_download(
 
 # Model Inference
 
+> 💡 Platform Notes
+>
+> The setup and inference procedure are largely the same for **A800/A100**, **RTX 5090**, and **Metax C500**.
+> The following instructions describe the common workflow.
+>
+> Platform-specific differences mainly involve environment selection, such as choosing the correct Docker image for your hardware.
+
 ## Prepare inference configs 
 > 💡 If you are not using the default save paths above, update the model paths in your config.  
-> See **[`kairos/configs/kairos_4b_config.py`](kairos/configs/kairos_4b_config.py)** for examples.
+> See **[`kairos/configs/kairos_4b_config.py`](kairos/configs/kairos_4b_config.py)** and **[`kairos/configs/kairos_4b_config_DMD.py`](kairos/configs/kairos_4b_config_DMD.py)** for examples.  
+> In general, use `kairos_4b_config_DMD.py` for **`kairos-sensenova-robot-4B-480P-distilled`**, and `kairos_4b_config.py` for other Kairos models.
 
 Kairos-sensenova-4B supports `T2V`/`I2V`/`TI2V` modes, select mode by setting the value of `prompt` and `input_image`. The main differences among these modes are shown below.
 ```python
@@ -123,34 +131,48 @@ Kairos-sensenova-4B supports `T2V`/`I2V`/`TI2V` modes, select mode by setting th
     # other args ...
 }
 ```
-> 💡 Tips: For more information of generating parameters, refer to `examples/example_*.json` and `__call__` function in the `kairos/pipelines/pipelines/kairos_video_pipeline.py`.
-
+> 💡 Tips: For more information of generating parameters, refer to `examples/example_*.json` and `__call__` function in the `kairos/pipelines/pipelines/kairos_video_pipeline_DMD.py`.
 
 ## Run Generation using single-GPU without Prompt Rewriter
-> 💡 These commands require ≥80GB GPU VRAM. Recommended GPUs: NVIDIA A100 / A800 .
 
+> 💡 Model / Config Matching
+>
+> Different models should be used with the corresponding `--config` file:
+>
+> - **`kairos-sensenova-robot-4B-480P-distilled`** → use **`kairos/configs/kairos_4b_config_DMD.py`**
+> - **other Kairos models** → use **`kairos/configs/kairos_4b_config.py`**
+>
+> In addition, the example JSON should match the selected model and target resolution for the best results.
+>
+> - For **`kairos-sensenova-robot-4B-480P-distilled`**, please use the **480P JSON configs** such as:
+>   - `examples/example_t2v_480P.json`
+>   - `examples/example_ti2v_480P.json`
+>   - `examples/example_i2v_480P.json`
+>
+> This distilled model is optimized for **480P**, and its performance at **720P** is not ideal.
+>
 - example of t2v inference
 ```bash
-bash examples/inference.sh examples/example_t2v.json
+bash examples/inference.sh examples/_example_t2v_480P.json kairos/configs/kairos_4b_config_DMD.py
 ```
 
 - example of ti2v inference
 ```bash
-bash examples/inference.sh examples/example_ti2v.json
+bash examples/inference.sh examples/example_ti2v_480P.json kairos/configs/kairos_4b_config_DMD.py
 ```
 
 - example of i2v inference
 ```bash
-bash examples/inference.sh examples/example_i2v.json
+bash examples/inference.sh examples/example_i2v_480P.json kairos/configs/kairos_4b_config_DMD.py
 ```
 
-> 💡 Tips: The default video resolution is 704x1280. You can modify the resolution in the example.json. For example, if you want to generate a 480P video, use `examples/example_i2v_480P.json`, `examples/example_t2v_480P.json` and `examples/example_ti2v_480P.json`.
+> 💡 Tips: The default video resolution is 480x640. You can modify the resolution in the example.json. For example, if you want to generate a 720P video, use `examples/example_i2v.json`, `examples/example_t2v.json` and `examples/example_ti2v.json`.
 
 ## Run Generation using Multi-GPU (torchrun)
 > ⚠️ Multi-GPU supports two modes:
 > - **Pure-TP** (no CFG-parallel): `tp_size = WORLD_SIZE`, requires `num_heads % WORLD_SIZE == 0`.
 > - **CFG-parallel**: splits positive/negative branches across GPUs, currently supported **only for WORLD_SIZE = 4 or 8**.
-
+> - **`kairos-sensenova-robot-4B-480P-distilled` does not support CFG-parallel**. Please use it without CFG-parallel enabled.
 > ⚙️ Additional Config for Multi-GPU Inference
 
 > When running with multi_gpu_inference.sh, you must enable tensor / sequence parallel related flags in the model config.
@@ -191,20 +213,21 @@ pipeline = dict(
     use_cfg_parallel=True
 )
 ```
->💡 Notes: `use_cfg_parallel` here enables **CFG-parallel** (distributed cond/uncond execution).  
+>💡 Notes: `use_cfg_parallel` here enables **CFG-parallel** (distributed cond/uncond execution).
+>💡 Example commands below use **4 GPUs** with `kairos/configs/kairos_4b_config_DMD.py`, and are intended for **`kairos-sensenova-robot-4B-480P-distilled`** with the corresponding **480P** example JSONs.
 - example of t2v inference
 ```bash
-bash examples/multi_gpu_inference.sh examples/example_t2v.json
+bash examples/multi_gpu_inference.sh examples/example_t2v_480P.json kairos/configs/kairos_4b_config_DMD.py 4
 ```
 
 - example of ti2v inference
 ```bash
-bash examples/multi_gpu_inference.sh examples/example_ti2v.json
+bash examples/multi_gpu_inference.sh examples/example_ti2v_480P.json kairos/configs/kairos_4b_config_DMD.py 4
 ```
 
 - example of i2v inference
 ```bash
-bash examples/multi_gpu_inference.sh examples/example_i2v.json
+bash examples/multi_gpu_inference.sh examples/example_i2v_480P.json kairos/configs/kairos_4b_config_DMD.py 4
 ```
 ## Enable TeaCache
 > ⚙️ TeaCache (Optional, works on both single-GPU and multi-GPU)
