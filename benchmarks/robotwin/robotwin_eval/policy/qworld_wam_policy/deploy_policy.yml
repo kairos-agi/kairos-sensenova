@@ -1,0 +1,23 @@
+# Basic RoboTwin/qworld-WAM policy configuration
+policy_name: robotwin_eval.policy.qworld_wam_policy
+task_name: null
+task_config: null
+ckpt_setting: null
+seed: 0
+instruction_type: unseen
+eval_num_episodes: 100
+
+# qworld WAM service args
+qworld_endpoint: null
+dataset_stats_path: null
+action_horizon: null
+replan_steps: 24
+num_inference_steps: 10
+cfg_scale: 8.0
+negative_prompt: ""
+tiled: false
+timing_enabled: false
+skip_get_obs_within_replan: true
+temporal_ensemble_enabled: false
+temporal_ensemble_decay: 0.01
+timeout_s: 3600.0

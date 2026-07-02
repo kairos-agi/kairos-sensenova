@@ -1,0 +1,10 @@
+_target_: kairoswam.models.external_model_adapter.ExternalModelAdapter
+
+# Optional explicit model route; defaults to env EXTERNAL_MODEL_PATH.
+endpoint: http://127.0.0.1:8005
+
+# HTTP / RPC timeout placeholder for future implementation.
+timeout_s: 30.0
+
+# Default true: server eager-loads on startup; eval skips /load_engine (may still /health).
+skip_load_engine: true

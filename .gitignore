@@ -34,7 +34,8 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
+tmp
+# third_party
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -118,6 +119,7 @@ venv.bak/
 .idea
 
 output/
+outputs/
 _my_configs/
 z_scripts/
 z_tools/

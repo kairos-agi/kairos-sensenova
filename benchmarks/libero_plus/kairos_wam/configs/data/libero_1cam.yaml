@@ -1,0 +1,65 @@
+train:
+  _target_: kairoswam.datasets.lerobot.robot_video_dataset.RobotVideoDataset
+  dataset_dirs:
+    - /path/to/data
+  shape_meta:
+    images:
+      - key: image
+      # - key: observation.images.image
+        raw_shape: [3, 512, 512]
+        shape: [3, 224, 224]
+      # - key: wrist_image
+      # # - key: observation.images.wrist_image
+      #   raw_shape: [3, 512, 512]
+      #   shape: [3, 224, 224]
+    action:
+      - key: default
+      # - key: action
+        raw_shape: 7 # before transform
+        shape: 7 # after transform
+    state:
+      - key: default
+      # - key: observation.state
+        raw_shape: 8 # before transform
+        shape: 8 # after transform
+  num_frames: 33
+  global_sample_stride: 1
+  action_video_freq_ratio: 4 # 32 action, 9 video frames
+  video_size: [224, 224] # final resize video
+  camera_key: null
+  val_set_proportion: 0.0
+  is_training_set: true
+  skip_padding_as_possible: false
+  concat_multi_camera: "horizontal"
+  processor:
+    _target_: kairoswam.datasets.lerobot.processors.kairos_wam_processor.KairosWAMProcessor
+    shape_meta: ${data.train.shape_meta}
+    num_obs_steps: ${data.train.num_frames}
+    num_output_cameras: 1
+    action_output_dim: 7 # eef_pose (6) + gripper (1)
+    proprio_output_dim: 8 # eef_pose (6) + gripper (2)
+    delta_action_dim_mask:
+      default: [true, true, true, true, true, true, false] # eef poses are delta, gripper is not
+
+    # action & state normalization
+    action_state_transforms: null
+    # action_state_transforms:
+    #   - _target_: kairoswam.datasets.lerobot.transforms.libero.LiberoTransform
+    use_stepwise_action_norm: False
+    norm_default_mode: min/max
+    norm_exception_mode: null
+
+    action_state_merger:
+      _target_: kairoswam.datasets.lerobot.transforms.action_state_merger.ConcatLeftAlign
+
+    train_transforms:
+      - _target_: kairoswam.datasets.lerobot.transforms.image.ToTensor
+      - _target_: torchvision.transforms.Resize
+        size: [224, 224]
+    val_transforms:
+      - _target_: kairoswam.datasets.lerobot.transforms.image.ToTensor
+      - _target_: torchvision.transforms.Resize
+        size: [224, 224]
+  # text_embedding_cache_dir: ./data/text_embeds_cache/libero
+  text_embedding_cache_dir: /path/to/text_embedding_cache_dir
+  context_len: 128

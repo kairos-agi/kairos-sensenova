@@ -1,0 +1,1 @@
+"""Model namespace for kairoswam."""

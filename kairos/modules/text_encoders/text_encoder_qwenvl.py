@@ -28,6 +28,12 @@ class QwenVLTextEncoder(nn.Module):
             processor_path = f'{KAIROS_HF_CHECKPOINTS_ROOT}/Qwen/Qwen2.5-VL-7B-Instruct'
             print('Loading text_encoder from from_pretrained:', text_encoder_path)
 
+        self.qw_rm_sys_prompt_in_vlm = int(os.environ.get('QW_RM_SYS_PROMPT_IN_VLM','0')) == 1
+        self.qw_drop_img_in_vlm = int(os.environ.get('QW_DROP_IMG_IN_VLM','0')) == 1
+
+        print('RNV: qw_rm_sys_prompt_in_vlm: {}'.format(self.qw_rm_sys_prompt_in_vlm))
+        print('RNV: qw_drop_img_in_vlm: {}'.format(self.qw_drop_img_in_vlm))
+
 
         print('Loading text encoder (Qwen2_5_VLForConditionalGeneration)')
         self.text_encoder = Qwen2_5_VLForConditionalGeneration.from_pretrained(text_encoder_path, dtype=dtype)
@@ -124,10 +130,15 @@ class QwenVLTextEncoder(nn.Module):
                     {"type": "text", "text": p},
                 ]
 
-            messages = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": user_content},
-            ]
+            if self.qw_rm_sys_prompt_in_vlm:
+                messages = [
+                    {"role": "user", "content": user_content},
+                ]
+            else:
+                messages = [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": user_content},
+                ]
 
             s = self.processor.apply_chat_template(
                 messages,
@@ -195,9 +206,13 @@ class QwenVLTextEncoder(nn.Module):
         return prompt_embeds.to(dtype=dtype), encoder_attention_mask
 
     def encode_prompt(self, prompt, images=None, positive=True, device='cuda'):
+        if self.qw_drop_img_in_vlm:
+            _images = None
+        else:
+            _images = images
         embeds, attention_mask = self._get_qwen_prompt_embeds(
             prompt=prompt, 
-            images=images, 
+            images=_images, 
             device=device,
             dtype=torch.bfloat16
         )

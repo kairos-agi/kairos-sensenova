@@ -34,7 +34,7 @@ from kairos.modules.utils import FLAGS_KAIROS_CUDA_SM
 SUPPORTED_ARCHS = {80, 89, 120, 121}
 if FLAGS_KAIROS_CUDA_SM in SUPPORTED_ARCHS:
     try:
-        from sageattention import sag_attention_with_window,sageattn_qk_int8_pv_fp16_cuda_with_window
+        from sageattention import sag_attention_with_window,sageattn
         SAGE_ATTN_AVAILABLE = True
     except ModuleNotFoundError:
         SAGE_ATTN_AVAILABLE = False
@@ -367,9 +367,6 @@ class SelfAttention(nn.Module):
         k = rope_apply(k, freqs, self.num_heads)
         use_dilated = dilated_length > 1 and x.shape[1] // (dilated_length * L) > 1
         
-        if self.attend_k0:
-            fk = k[:, :1]
-            fv = v[:, :1]
 
         if use_dilated:
             assert x.shape[1] % L == 0, "L should equal to the num of tokens per frame"
@@ -381,33 +378,8 @@ class SelfAttention(nn.Module):
             q = rearrange(q, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
             k = rearrange(k, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
             v = rearrange(v, "b (n d l) c -> (b d) (n l) c", l=L, d=dilated_length)
-            if self.attend_k0:
-                fk = fk.unsqueeze(1).expand(-1, dilated_length, -1, -1).flatten(0, 1)
-                fv = fv.unsqueeze(1).expand(-1, dilated_length, -1, -1).flatten(0, 1)
-        if not self.attend_k0:
             x = self.attn(q, k, v, window_size=(L*self.window_size, L*self.window_size))
-        else:
-            q = rearrange(q, "b s (n d) -> b s n d", n=self.num_heads)
-            k = rearrange(k, "b s (n d) -> b s n d", n=self.num_heads)
-            v = rearrange(v, "b s (n d) -> b s n d", n=self.num_heads)
-            x, probs = flash_attention(
-                q=q, k=k, v=v, num_heads=self.num_heads, 
-                window_size=(L*self.window_size, L*self.window_size), return_attn_probs=True
-            )
 
-            fk = rearrange(fk, "b s (n d) -> b s n d", n=self.num_heads)
-            fv = rearrange(fv, "b s (n d) -> b s n d", n=self.num_heads)
-            fv_expand = fv.expand_as(q)
-            softmax_scale = 1.0 / math.sqrt(q.shape[-1])
-            logits0 = (q * fk).sum(dim=-1) * softmax_scale
-
-            probs = probs.transpose(1, 2)
-            lse_total = torch.logaddexp(probs, logits0.float())
-            w_swa = torch.exp(probs - lse_total).to(x.dtype).unsqueeze(-1)
-            w0 = torch.exp(logits0 - lse_total).to(x.dtype).unsqueeze(-1)
-
-            x = x * w_swa + fv_expand * w0
-            x = rearrange(x, "b s n d -> b s (n d)", n=self.num_heads)
         out = self.o(x)
         if use_dilated:
             out = rearrange(out, "(b d) (n l) c -> b (n d l) c", l=L, d=dilated_length)

@@ -1,0 +1,15 @@
+{
+    "input_image":"assets/robots/robot_1.jpg",
+    "prompt":"The robotic arm sweeps a green cloth across the wooden surface.",
+    "negative_prompt" : "bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, deformed limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards, contorted human joints, objects floating against natural forces, abrupt shot changes",
+    "seed":0, 
+    "tiled":true,
+    "height":480,
+    "width": 832,
+    "num_frames":81,
+    "cfg_scale":5,
+    "use_prompt_rewriter": false,
+    "output_dir": "output/ti2v"
+}
+
+

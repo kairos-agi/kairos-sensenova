@@ -207,7 +207,7 @@ if __name__ == '__main__':
     print(f'=====================infer====================')
 
     start_time = time.perf_counter()
-    video = pipeline(**input_args_d)
+    pipe_out = pipeline(**input_args_d)
 
     elapsed = time.perf_counter() - start_time
 
@@ -216,12 +216,19 @@ if __name__ == '__main__':
 
     # save video
     if rank == 0:
-        save_fps = 16
-        if len(video) == 1:
-            save_path = save_path.replace('.mp4', '.jpg')
-            save_image(video[0], save_path)
+        if isinstance(pipe_out, dict):
+            video_pred = pipe_out.get('video', None)
+            action_pred = pipe_out.get('action', None)
         else:
-            save_video(video, save_path, fps=save_fps, quality=5)
+            video_pred = pipe_out
+            action_pred = None
+
+        save_fps = 16
+        if len(video_pred) == 1:
+            save_path = save_path.replace('.mp4', '.jpg')
+            save_image(video_pred[0], save_path)
+        else:
+            save_video(video_pred, save_path, fps=save_fps, quality=5)
 
     if dist.is_initialized():
         dist.destroy_process_group()
