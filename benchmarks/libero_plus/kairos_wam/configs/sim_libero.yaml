@@ -1,0 +1,69 @@
+# @package _global_
+
+defaults:
+  - train
+  - override /task: libero_uncond_2cam224_1e-4
+  - _self_
+
+ckpt: null
+gpu_id: 0
+
+model:
+  load_text_encoder: true
+  skip_dit_load_from_pretrain: true
+  action_dit_pretrained_path: null
+
+EVALUATION:
+  # Used when MULTIRUN.run_all_categories=false (single-category debug run).
+  task_suite_name: libero_mix
+  task_id: 0
+  num_trials: 1
+  output_dir: libero_plus/${hydra:runtime.choices.task}/${now:%Y%m%d_%H%M%S}
+  # LIBERO-Plus perturbation categories (see task_classification.json).
+  category_value: "Background Textures"
+
+  env_num: 1
+  num_steps_wait: 30
+  replan_steps: 10
+  binarize_gripper: true
+  use_action_ensembler: false
+  visualize_future_video: false
+
+  action_horizon: null
+  num_inference_steps: ${eval_num_inference_steps}
+  sigma_shift: null
+  text_cfg_scale: 1.0
+  negative_prompt: ""
+  rand_device: cpu
+  tiled: false
+
+  dataset_stats_path: null
+  device: cuda
+
+MULTIRUN:
+  create_only: false
+  task_file: null
+  # Per-category batches (small tasks.txt each): use
+  #   python experiments/libero/run_libero_plus_by_category.py --output-dir=...
+  # or repo-root s4_inference_by_category_qw_1.sh
+  run_all_categories: true
+  # Add libero_mix on top of the four base suites (ignored when only libero_mix is listed).
+  include_libero_mix: false
+  category_values: null
+  # libero_mix only → results under <output>/libero_mix/<category>/ only.
+  # Uncomment suites below for per-suite matrix; set include_libero_mix: true to also run mix.
+  task_suite_names:
+    # - libero_spatial
+    # - libero_object
+    # - libero_goal
+    # - libero_10
+    - libero_mix
+  num_gpus: 8
+  max_tasks_per_gpu: 2
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null

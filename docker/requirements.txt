@@ -9,5 +9,5 @@ modelscope==1.26.0
 numpy==1.26.4
 numpydantic==1.6.11
 pillow==11.1.0
-transformers==4.57.1
+transformers==5.2.0
 autoawq==0.2.9

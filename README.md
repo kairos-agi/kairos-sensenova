@@ -1,38 +1,40 @@
-# Kairos 3.0
+# Kairos
 
 <p align="center">
     <img src="assets/logo_kairos.png" width="500"/>
-<p>
+</p>
 
 <p align="center">
-    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/collections/kairos-agi/kairos30">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/collections/kairos-team/kairos30">Model Scope</a>&nbsp&nbsp| &nbsp&nbsp 📑 <a href="">Paper</a> &nbsp&nbsp 
+    💜 <a href="https://kairos.acerobotics.com">Kairos Platform</a> &nbsp&nbsp ｜ &nbsp&nbsp 🖥️ <a href="https://github.com/kairos-agi">GitHub</a> &nbsp&nbsp  | &nbsp&nbsp🤗 <a href="https://huggingface.co/collections/kairos-agi/kairos30">Hugging Face</a>&nbsp&nbsp | &nbsp&nbsp🤖 <a href="https://modelscope.cn/collections/kairos-team/kairos30">Model Scope</a>&nbsp&nbsp| &nbsp&nbsp 📑 <a href="https://arxiv.org/abs/2606.16533">Paper</a> &nbsp&nbsp 
+</p>
 
 -----
-**Kairos 3.0** is grounded in physical laws as its cognitive foundation, establishing a unified cross-embodiment world modeling framework. Featuring a 4B-parameter architecture with a custom hybrid linear attention operator, it unifies multimodal understanding, generation, and action prediction for real-time edge deployment. By achieving physics-level deep cognition and low-latency inference, it empowers high-precision action prediction and HD generation for both physical and digital embodied AI applications.
+**Kairos** is a 4B-parameter native cross-embodiment world model for unified understanding, generation, and action prediction. Through a progressive Cross-Embodiment Data Curriculum, it learns from general videos, human behavior, and real-robot interaction to build persistent world representations. Powered by a World-Action Model architecture and hybrid linear temporal memory, Kairos jointly predicts future visual states and executable robot actions, enabling long-horizon reasoning, high-quality generation, and real-time edge-side deployment for embodied AI.
 
-## 🎯 1. Motivation
-While Scaling Laws are emerging in Embodied AI, their efficiency is severely bottlenecked by data heterogeneity, poor long-horizon reasoning, and edge-side compute constraints. These hurdles make scaling alone insufficient for reliable interaction, hindering the path to industrial-grade General Embodied Intelligence.
+## 🚀 1. Motivation
+Embodied AI is entering the era of Scaling Laws, yet scaling alone cannot overcome the core barriers to reliable real-world interaction. Heterogeneous embodiment data, weak long-horizon reasoning, separated video-and-action modeling, and edge-side compute constraints still limit the practicality of current world models. Kairos addresses these challenges by unifying cross-embodiment pretraining, persistent world-state modeling, future generation, and executable action prediction within an efficient deployment-aware framework.
 
-## 🌟  2. Kairos 3.0  Framework
+
+## 🌟 2. Kairos Framework
 
 <div align="center">
 <table align="center">
     <tr>
-        <td align="center"><img src="assets/1.png" width="320"/></td>
-        <td align="center"><img src="assets/2.png" width="320"/></td>
-        <td align="center"><img src="assets/3.png" width="320"/></td>
+        <td align="center"><img src="assets/framework_new_v1.png" height="256"/></td>
+        <td align="center"><img src="assets/kairos_arch1.jpg" height="256"/></td>
+        <td align="center"><img src="assets/architecture_kairos.png" height="256"/></td>
     </tr>
 </table>
 </div>
 
-### 🌍 Unified World Modeling Framework
-Kairos 3.0 uses fundamental physical and causal laws as its cognitive foundation. By integrating real-robot interaction, structured human behavior, and Chain-of-Thought (CoT) data, it breaks heterogeneity barriers and boosts data reuse efficiency. This shifts the paradigm from simple imitation to physics-level deep understanding, enabling robust generalization and long-horizon reasoning at a more efficient model scale.
+### 🌍 Native Pretraining Paradigm with Cross-Embodiment Data Curriculum
+Kairos introduces a native world-model pretraining paradigm that learns physical, behavioral, and embodied knowledge from scratch, rather than relying on decoupled post-training adaptation. Through a Cross-Embodiment Data Curriculum (CEDC), the model progressively absorbs knowledge from general videos, human behavior data, and real-robot interaction data. This curriculum enables Kairos to move beyond flat data scaling, building world representations that evolve from passive physical understanding to active task intent and embodied control.
 
-### 🔗 Integrated Multimodal Architecture
-Designed as a unified end-to-end pipeline for Understanding, Generating, and Predicting the world. Leveraging physical laws and causal CoT, the model doesn't just "see" but "understands" the underlying logic of environments. This allows for precise decomposition of complex tasks, seamless planning, and reliable execution in a single intelligence loop.
+### 🔗 Unified Understanding–Generation–Prediction Architecture
+Kairos is designed as a native end-to-end architecture for understanding, generating, and predicting the world within a unified Mixture-of-Transformers framework. Instead of treating world modeling as simple video continuation, Kairos maintains persistent world states, where understanding provides causal interpretation, generation unfolds plausible futures, and prediction produces executable robot actions. This unified design allows the model to connect perception, reasoning, planning, and action in a single intelligence loop.
 
-### ⚡ Linear-Time Attention for World Models
-Introducing the first Hybrid Linear Attention operator specifically for world models. By reducing temporal complexity from $O(n^2)$ to $O(n)$, Kairos 3.0 slashes VRAM and compute overhead while maintaining long-sequence capabilities. This enables the industry’s first real-time on-robot inference for an open-source world model.
+### ⚡ Hybrid Linear Temporal Memory for Efficient Deployment
+Kairos introduces a hybrid linear temporal memory mechanism for long-horizon world modeling. By combining Sliding-Window Attention, Dilated Sliding-Window Attention, and Gated Linear Attention, the model captures local dynamics, mid-range interactions, and global causal memory under linear-complexity temporal modeling. Together with deployment-aware system co-design, including efficient kernels, quantization, and token streaming, Kairos supports low-memory, high-throughput inference and lays the foundation for real-time closed-loop deployment.
 
 ## ✨ 3. Demos
 <div align="center">
@@ -41,6 +43,7 @@ Introducing the first Hybrid Linear Attention operator specifically for world mo
         <tr>
             <th style="text-align: center;">Physical–causal consistency</th>
             <th style="text-align: center;">Cross-embodiment generalization</th>
+             <th style="text-align: center;"> Accurate Action Prediction </th>
             <th style="text-align: center;">High-efficiency inference</th>
         </tr>
     </thead>
@@ -48,140 +51,102 @@ Introducing the first Hybrid Linear Attention operator specifically for world mo
             <tr>
             <td style="text-align: center;"><img src="assets/videos/physical-1.gif" width="240"/></td>
             <td style="text-align: center;"><img src="assets/videos/cross-1.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/robotwin_demo_1.gif" width="240"/></td>
             <td style="text-align: center;" rowspan="3"><img src="assets/videos/hpc.gif" width="240"/></td>
         </tr>
         <tr>
             <td style="text-align: center;"><img src="assets/videos/physical-2.gif" width="240"/></td>
             <td style="text-align: center;"><img src="assets/videos/cross-2.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/robotwin_demo_2.gif" width="240"/></td>
         </tr>
         <tr>
             <td style="text-align: center;"><img src="assets/videos/physical-3.gif" width="240"/></td>
             <td style="text-align: center;"><img src="assets/videos/cross-3.gif" width="240"/></td>
+            <td style="text-align: center;"><img src="assets/videos/libero_plus_demo_1.gif" width="240"/></td>
         </tr>
     </tbody>
 </table>
 </div>
 
-### 🧠 Physical–causal consistency
+#### 🧠 Physical–causal consistency
 Kairos leverages causal CoT and physical laws to transform multimodal inputs into deep task logic. It enables autonomous planning and feasibility analysis, shifting the system from "executing commands" to "understanding intent" for real-world robotic actions.
-### 🎨 Cross-embodiment generalization
-Unified Cross-Embodied Generation: A single "brain" that generalizes across single-arm, dual-arm, and dexterous-hand platforms. Kairos enables shared, transferable world knowledge with maximal adaptability. Broad Hardware Support: Native compatibility with Agibot G1, Unitree G1, and Songling PIPER, significantly slashing development costs through zero-shot multi-task generalization.
-### 🔮 High-efficiency inference
+#### 🎨 Cross-embodiment generalization
+Unified Cross-Embodiment Generation: A single "brain" that generalizes across single-arm, dual-arm, and dexterous-hand platforms. Kairos enables shared, transferable world knowledge with maximal adaptability. Broad Hardware Support: Native compatibility with Agibot G1, Unitree G1, and Songling PIPER, significantly slashing development costs through zero-shot multi-task generalization.
+#### 🎯 Accurate Action Prediction
+Powered by its World-Action Model, Kairos predicts executable robot action trajectories directly from visual observations and task context. This enables accurate, temporally coherent, and physically grounded action generation for long-horizon embodied manipulation.
+#### 🔮 High-efficiency inference
 Real-time Edge Performance: Industry-leading inference speed with ultra-low resource consumption. Optimized for low-latency, high-reliability deployment across single or multi-GPU embodied systems.
 
-## 📦 4. Model Zoo
-| Download Links | Model Version | Use cases | Highlights |
-|:---:|:---:|:---:|:---:|
-| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-4B-480P-pretrained)  🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-4B-480P-pretrained) | kairos-4B-480P | 480p general pretrained model | 480p pretrained model for downstream fine-tuning. |
-| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-robot-4B-480P) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-robot-4B-480P) | kairos-4B-robot-480P | Robot manipulation & real-world closed-loop control | Specialized for embodied AI; leading accuracy on PAI-Bench |
-| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-robot-4B-480P-distilled) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-robot-4B-480P-distilled) | kairos-4B-robot-480P-distillation | On-robot Integration、Edge Computing、Low-power Efficiency | Ultra-lightweight via distillation; enables real-time inference on embedded/edge devices. |
-| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-4B-720P) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-4B-720P)| kairos-4B-720p | HD visual generation & complex physical reasoning | Supports 720P HD output with enhanced fine-grained detail capture. |
 
-## 📈5. Evaluation 
+## 📦 4. Model Zoo
+| Download Links | Model Version | Highlights |
+|:---:|:---:|:---:|
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/Kairos3.1-4B-robot-480P) 🤖[ModelScope](https://www.modelscope.cn/models/kairos-team/Kairos3.1-4B-robot-480P) | kairos3.1-4B-robot-480P |   Embodied foundation model for generation |
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-4B-robot-RoboTwin2.0) 🤖[ModelScope](https://www.modelscope.cn/models/kairos-team/kairos-4B-robot-RoboTwin2.0)| kairos3.1-4B-robot-RoboTwin2.0 | SOTA performance on 50+ bimanual RoboTwin2.0 tasks|
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-4B-robot-LIBERO-plus) 🤖[ModelScope](https://www.modelscope.cn/models/kairos-team/kairos-4B-robot-LIBERO-plus)| kairos3.1-4B-robot-LIBERO-plus | SOTA performance on LIBERO-plus |
+| 🤗[HuggingFace](https://huggingface.co/kairos-agi/kairos-sensenova-4B-720P) 🤖[ModelScope](https://modelscope.cn/models/kairos-team/kairos-sensenova-4B-720P)| kairos-4B-720P | Supports 720P HD output with enhanced fine-grained detail capture |
+
+
+## 📈 5. Evaluation 
 ### 🎯 5.1 Accuracy Benchmarks
 
 <div align="center">
 <table align="center">
-    <thead>
-        <tr>
-            <th align="center">Domain</th>
-            <th align="center">Benchmarks</th>
-            <th align="center">Kairos-Robot</th>
-            <th align="center">Cosmos 2.5-2B*</th>
-            <th align="center">Wan 2.2-5B*</th>
-            <th align="center">Cosmos 2.5-14B*</th>
-            <th align="center">Lingbot*</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td align="center" rowspan="3">Robot</td>
-            <td align="center">PAI-Bench-robot</td>
-            <td align="center">80.03</td>
-            <td align="center">78.3</td>
-            <td align="center">78.6</td>
-            <td align="center">79.4</td>
-            <td align="center">79.96</td>
-        </tr>
-        <tr>
-            <td align="center">WorldModelBench-robot TI2V</td>
-            <td align="center">9.08</td>
-            <td align="center">9.04</td>
-            <td align="center">8.52</td>
-            <td align="center">8.94</td>
-            <td align="center">9.04</td>
-        </tr>
-        <tr>
-            <td align="center">DreamGen Bench(PA/IF)</td>
-            <td align="center">0.529/0.609</td>
-            <td align="center">0.418/0.568</td>
-            <td align="center">0.314/0.543</td>
-            <td align="center">0.495/0.478</td>
-            <td align="center">0.466/0.569</td>
-        </tr>
-    </tbody>
+    <tr>
+        <!-- 左边一列 -->
+        <td align="center">
+        <img src="assets/evals/eval_worldmodel_bench.png" height="350px" alt="worldmodel_bench"><br>
+        </td>
+        <!-- 右边一列 -->
+        <td align="center">
+        <img src="assets/evals/eval_dreamgen.png" height="350px" alt="dreamgen"><br>
+        </td>
+    </tr>
+    <tr>
+        <td colspan="2" align="center">
+        <strong>Performance comparison across embodied world model benchmarks</strong>
+        </td>
+    </tr>
 </table>
 </div>
+
 
 <div align="center">
 <table align="center">
-    <thead>
-        <tr>
-            <th align="center">Domain</th>
-            <th align="center">Benchmarks</th>
-            <th align="center">Kairos 3.0-4B</th>
-            <th align="center">Cosmos 2.5-2B*</th>
-            <th align="center">Wan 2.2-5B*</th>
-            <th align="center">Cosmos 2.5-14B</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td align="center" rowspan="3">General</td>
-            <td align="center">PAI-Bench</td>
-            <td align="center">80.84</td>
-            <td align="center">81.0</td>
-            <td align="center">80.4</td>
-            <td align="center">81.0</td>
-        </tr>
-        <tr>
-            <td align="center">WorldModelBench</td>
-            <td align="center">8.94</td>
-            <td align="center">8.86</td>
-            <td align="center">8.70</td>
-            <td align="center">9.02*</td>
-        </tr>
-        <tr>
-            <td align="center">VideoPHY</td>
-            <td align="center">45.55</td>
-            <td align="center">44.64</td>
-            <td align="center">38.85</td>
-            <td align="center">-</td>
-        </tr>
-    </tbody>
+    <tr>
+        <!-- 左边一列 -->
+        <td align="center">
+        <img src="assets/evals/eval_robotwin2.0.png" height="350px" alt="eval_robotwin2.0"><br>
+        </td>
+        <!-- 右边一列 -->
+        <td align="center">
+        <img src="assets/evals/eval_libero_plus.png" height="350px" alt="eval_libero_plus"><br>
+        </td>
+    </tr>
+    <tr>
+        <td colspan="2" align="center">
+        <strong>Performance comparison across world action model benchmarks</strong>
+        </td>
+    </tr>
 </table>
 </div>
-
-*（results reproduced from open-source model baselines, "robot" refers to the corresponding results of the robot subset.）
-
-Kairos models deliver SOTA performance across diverse benchmarks. In embodied scenarios, Kairos-Robot leads PAI-Bench with a score of 80.03 and dominates generalization tasks in DreamGen Bench. For general world modeling, Kairos 3.0-4B matches or exceeds larger-scale models on WorldModelBench and VideoPHY, achieving a perfect balance of precision and efficiency at a compact 4B scale.
 
 ### ⚡ 5.2 Deployment
 #### 5.2.1 Real-time Inference
 
-| GPU | Resulotion | Memory(GB) | 1 GPU (s) | 4 GPUs (s) |
+| GPU | Resolution | Memory(GB) | 1 GPU (s) | 4 GPUs (s) |
 |:---:|:---:|:---:|:---:|:---:|
 | NV-A800 | 480P | 23.5 | 11.7 | 3.0 |
 | NV-RTX5090 | 480P | 13.9 | 11.4 | 5.7 |
 
-*（results based on kairos-4B-robot 480p distillation）
+*(results based on kairos-4B-robot 480p distillation)
 
 #### 5.2.2 Benchmark for A800 GPU
 
 
-| Model | Parameter | Memory (GB) | Complexity (PFlops) | 1 GPU (s) | 4 GPUs (s) |
+| Model | Parameters | Memory (GB) | Complexity (PFLOPs) | 1 GPU (s) | 4 GPUs (s) |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| Kairos 3.0 | 4B | 23.5 | 2.3 | 43.3 | 9.5 |
+| Kairos | 4B | 23.5 | 2.3 | 43.3 | 9.5 |
 | Cosmos 2.5 | 14B | 70.2 | 156.5 (~70x) | 2526.0 | 687.2 |
 | Wan 2.2 | 5B | 23.4 | 16.6 (~7x) | 201.0 | 85.0 |
 | Lingbot | 28B | 46.1 | 347.4 (~160x) | 5525.0 | 1436.0 |
@@ -251,20 +216,20 @@ pip install -r requirements.txt
 pip install -U huggingface_hub 
 
 # 4B-480P
-hf download kairos-agi/kairos-sensenova-4B-480P-pretrained \
-  --local-dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
+hf download kairos-agi/Kairos3.1-4B-robot-480P \
+  --local-dir models/Kairos-model/kairos-agi/Kairos3.1-4B-robot-480P
 
 # 4B-720P
 hf download kairos-agi/kairos-sensenova-4B-720P \
-  --local-dir models/Kairos-model/kairos-sensenova-4B-720P 
+  --local-dir models/Kairos-model/kairos-agi/kairos-sensenova-4B-720P 
 
-# 4B-robot
-hf download kairos-agi/kairos-sensenova-robot-4B-480P \
-  --local-dir models/Kairos-model/kairos-sensenova-robot-4B-480P
+# 4B-robot-RoboTwin2.0
+hf download kairos-agi/kairos-4B-robot-RoboTwin2.0 \
+  --local-dir models/Kairos-model/kairos-agi/kairos-4B-robot-RoboTwin2.0
 
-# 4B-robot distilled
-hf download kairos-agi/kairos-sensenova-robot-4B-480P-distilled \
-  --local-dir models/Kairos-model/kairos-sensenova-robot-4B-480P-distilled
+# 4B-robot-LIBERO-plus
+hf download kairos-agi/kairos-4B-robot-LIBERO-plus \
+  --local-dir models/Kairos-model/kairos-agi/kairos-4B-robot-LIBERO-plus
 
 ```
 - Download with modelscope
@@ -272,25 +237,25 @@ hf download kairos-agi/kairos-sensenova-robot-4B-480P-distilled \
 pip install modelscope
 
 # 4B-480P
-modelscope download kairos-team/kairos-sensenova-4B-480P-pretrained \
-  --local_dir models/Kairos-model/kairos-sensenova-4B-480P-pretrained 
+modelscope download kairos-team/Kairos3.1-4B-robot-480P \
+  --local_dir models/Kairos-model/kairos-agi/kairos-team/Kairos3.1-4B-robot-480P 
 
 # 4B-720P
 modelscope download kairos-team/kairos-sensenova-4B-720P \
-  --local_dir models/Kairos-model/kairos-sensenova-4B-720P 
+  --local_dir models/Kairos-model/kairos-agi/kairos-sensenova-4B-720P 
 
-# 4B-robot
-modelscope download kairos-team/kairos-sensenova-robot-4B-480P \
-  --local_dir models/Kairos-model/kairos-sensenova-robot-4B-480P
+# 4B-robot-RoboTwin2.0
+modelscope download kairos-team/kairos-4B-robot-RoboTwin2.0 \
+  --local_dir models/Kairos-model/kairos-agi/kairos-4B-robot-RoboTwin2.0
 
-# 4B-robot distilled
-modelscope download kairos-team/kairos-sensenova-robot-4B-480P-distilled \
-  --local_dir models/Kairos-model/kairos-sensenova-robot-4B-480P-distilled
+# 4B-robot-LIBERO-plus
+modelscope download kairos-team/kairos-4B-robot-LIBERO-plus \
+  --local_dir models/Kairos-model/kairos-agi/kairos-4B-robot-LIBERO-plus
 
 ```
 ### 6.3 Run Inference
 ```bash
-Note: Please complete Section 6.2 first to download the Kairos model weights.
+# Note: Please complete Section 6.2 first to download the Kairos model weights.
 
 # Step1: Download additional dependencies for inference
 mkdir -p models/Qwen models/Wan2.1-T2V-14B
@@ -299,7 +264,10 @@ mkdir -p models/Qwen models/Wan2.1-T2V-14B
 hf download Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
   --local-dir models/Qwen/Qwen2.5-VL-7B-Instruct-AWQ \
   --include "*.safetensors"  
-  
+
+hf download Qwen/Qwen3.5-2B \
+  --local-dir models/Qwen/Qwen3.5-2B
+
 # Download Wan2.1-VAE for VAE-Encoder/Decoder
 hf download Wan-AI/Wan2.1-T2V-14B \
   --local-dir models/Wan2.1-T2V-14B \
@@ -313,25 +281,57 @@ hf download Wan-AI/Wan2.1-T2V-14B \
 # optimized for 480P, and its performance at 720P is not ideal.
 #
 # For other models and the matching configs, please refer to `docs/QUICKSTART.md`.
+
+# kairos-4B-720p
 # Text2Video
-bash examples/inference.sh examples/example_t2v_480P.json
+bash examples/inference.sh examples/example_t2v.json kairos/configs/kairos_4b_config.py
 # Text&FirstImage2Video
-bash examples/inference.sh examples/example_ti2v_480P.json
+bash examples/inference.sh examples/example_ti2v.json kairos/configs/kairos_4b_config.py
 # FirstImage2Video
-bash examples/inference.sh examples/example_i2v_480P.json
+bash examples/inference.sh examples/example_i2v.json kairos/configs/kairos_4b_config.py
+
+# kairos-team/Kairos3.1-4B-robot-480P
+# Text&FirstImage2Video
+bash examples/inference.sh examples/example_ti2v_480P_robot_1.json kairos/configs/kairos_4b_video_only_config.py
+bash examples/inference.sh examples/example_ti2v_480P_robot_2.json kairos/configs/kairos_4b_video_only_config.py
+
 ```
+
+### 6.4 Run Inference in Simulation Environments
+
+We provide benchmark-specific instructions and evaluation scripts for the following embodied AI benchmarks.
+
+| Benchmark    | Description                                                                                         | Guide                                                      |
+| ------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| RoboTwin 2.0 | Dual-arm manipulation benchmark for evaluating long-horizon embodied control and action prediction. | [benchmarks/robotwin](benchmarks/robotwin/README.md)       |
+| LIBERO-Plus  | Long-horizon manipulation benchmark for evaluating generalization across tasks and scenes.          | [benchmarks/libero_plus](benchmarks/libero_plus/README.md) |
 
 ## 👥 7. About Us
 Developed and maintained by the Kairos Team. We specialize in Embodied Intelligence and World Model research, with a mission to build Artificial General Intelligence (AGI) that truly understands the physical world. Our goal is to accelerate the industrialization of embodied technologies and reshape the global landscape of AI competition.
 ## 📄 8. License
 Kairos is open-sourced under the Apache License 2.0. Feel free to use, modify, and build commercial products on top of it. Check the [LICENSE](LICENSE)  file for the full text.
 
-## 9. Acknowledgements
+## 📚 9. Citation
+If you find our work helpful, please cite us.
 
-We would like to thank the contributors to [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) and [HuggingFace](https://huggingface.co) for their open-source research contributions.
+```
+@misc{kairosteam2026kairosnativeworldmodel,
+      title={Kairos: A Native World Model Stack for Physical AI}, 
+      author={Kairos Team and Fei Wang and Shan You and Qiming Zhang and Tao Huang and Zuoyi Fu and Zhisheng Zheng and Yunlong Xi and Feng Lv and Xiaoming Wu and Zeyu Liu and Cong Wan and Pu Li and Ruiqing Yang and Xiaoou Li and Wei Wang and Kangkang Zhu and Yuwei Zhang and Shi Fu and Zheng Zhang and Xiaoning Wu and Xuzeng Fan and Dacheng Tao and Xiaogang Wang},
+      year={2026},
+      eprint={2606.16533},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2606.16533}, 
+}
+```
+
+## 🙏 10. Acknowledgements
+
+We would like to thank the contributors to [Qwen-Image](https://huggingface.co/Qwen/Qwen-Image), [Wan2.1](https://github.com/Wan-Video/Wan2.1), [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio), [FastWAM](https://github.com/yuantianyuan01/FastWAM) and [HuggingFace](https://huggingface.co) for their open-source research contributions.
 
 ---
-⭐ Star us on GitHub if you find [Kairos 3.0](https://github.com/kairos-agi/kairos-sensenova) helpful!
+⭐ Star us on GitHub if you find [Kairos](https://github.com/kairos-agi/kairos-sensenova) helpful!
 
 
 

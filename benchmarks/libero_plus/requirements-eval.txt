@@ -1,0 +1,41 @@
+# LIBERO-Plus eval environment 
+# Usage:
+#   conda create -n libero-plus-eval python=3.10.20 -y && conda activate libero-plus-eval
+#   pip install -r requirements-eval.txt
+#   pip install -e <LIBERO_PKG_ROOT>   # ref_pkgs/LIBERO-plus
+#
+# Covers: Hydra eval harness + robosuite/mujoco simulation + HTTP client to WAM.
+
+# config
+hydra-core==1.2.0
+omegaconf==2.3.0
+
+# eval harness
+accelerate==1.12.0
+numpy==1.26.4
+pillow==12.0.0
+imageio==2.37.0
+imageio-ffmpeg==0.6.0
+requests==2.33.1
+tqdm==4.66.5
+pandas==2.2.3
+PyYAML==6.0.3
+
+# torch (processor / normalizer only; model runs on WAM server)
+torch==2.7.1+cu128
+torchvision==0.22.1+cu128
+
+# simulation stack
+robosuite==1.4.0
+mujoco==3.3.2
+bddl==1.0.1
+easydict==1.9
+gym==0.25.2
+opencv-python==4.6.0.66
+h5py==3.16.0
+scipy==1.13.1
+matplotlib==3.5.3
+robomimic==0.2.0
+lxml==6.0.4
+glfw==2.10.0
+PyOpenGL==3.1.10

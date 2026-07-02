@@ -1,0 +1,48 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: null
+  - model: null
+  - task: null
+
+
+output_dir: ./runs/train/${now:%Y-%m-%d}_${now:%H-%M-%S}
+
+# dataloading
+batch_size: 1
+num_workers: 1
+
+# scheduler
+lr_scheduler_type: "cosine"
+learning_rate: 1.0e-4
+num_epochs: 1
+max_steps: null
+log_every: 10
+save_every: 100
+eval_every: 50
+eval_num_inference_steps: 10
+
+# training
+gradient_accumulation_steps: 1
+mixed_precision: "bf16" # one of: [no, fp16, bf16]
+seed: 50
+max_grad_norm: 1.0
+weight_decay: 0.0
+resume: null
+
+# wandb
+wandb:
+  enabled: false
+  workspace: null
+  project: kairos-wam
+  name: train
+  group: null
+  mode: online
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null

@@ -26,9 +26,15 @@ from kairos.modules.utils import parallel_state
 from kairos.modules.vaes.parallel_vae_wrapper import ParallelVAEWrapper
 from kairos.modules.utils.tp_utils import _gather_input_sp, _distribute_input_sp
 
-# from ..models.init_parameters import init_parameters
+try:
+    from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm
+except ImportError:
+    from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+        Qwen2_5_VLRMSNorm as Qwen2RMSNorm,
+    )
+
+Qwen2_5_VLRMSNorm = Qwen2RMSNorm
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2RMSNorm,
     Qwen2_5_VLRotaryEmbedding,
     Qwen2_5_VisionRotaryEmbedding,
 )
