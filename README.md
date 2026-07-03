@@ -11,6 +11,19 @@
 -----
 **Kairos** is a 4B-parameter native cross-embodiment world model for unified understanding, generation, and action prediction. Through a progressive Cross-Embodiment Data Curriculum, it learns from general videos, human behavior, and real-robot interaction to build persistent world representations. Powered by a World-Action Model architecture and hybrid linear temporal memory, Kairos jointly predicts future visual states and executable robot actions, enabling long-horizon reasoning, high-quality generation, and real-time edge-side deployment for embodied AI.
 
+## 🔥 0. Latest News
+
+Jul 2, 2026: 🛠️ We've open-sourced the Kairos3.1 series, including World-Action Model inference code and three model weights: [Kairos3.1-4B-robot-480P](https://huggingface.co/kairos-agi/Kairos3.1-4B-robot-480P), [kairos-4B-robot-RoboTwin2.0](https://huggingface.co/kairos-agi/kairos-4B-robot-RoboTwin2.0), and [kairos-4B-robot-LIBERO-plus](https://huggingface.co/kairos-agi/kairos-4B-robot-LIBERO-plus). RoboTwin 2.0 and LIBERO-Plus support executable action prediction.
+
+Jun 16, 2026: 📄 We've released the Kairos technical report on arXiv: [Kairos Technical Report](https://arxiv.org/abs/2606.16533).
+
+Feb 26, 2026: 👋 We've released Kairos video world model weights, including [kairos-robot-4B-480P](https://huggingface.co/kairos-agi/kairos-sensenova-robot-4B-480P), [kairos-robot-4B-480P-distilled](https://huggingface.co/kairos-agi/kairos-sensenova-robot-4B-480P-distilled), and [kairos-4B-720P](https://huggingface.co/kairos-agi/kairos-sensenova-4B-720P).
+
+Dec 18, 2025: 🎉 Kairos 3.0 was officially introduced, along with the Kairos World Model inference code and [kairos-4B-480P-pretrained](https://huggingface.co/kairos-agi/kairos-sensenova-4B-480P-pretrained).
+
+
+
+
 ## 🚀 1. Motivation
 Embodied AI is entering the era of Scaling Laws, yet scaling alone cannot overcome the core barriers to reliable real-world interaction. Heterogeneous embodiment data, weak long-horizon reasoning, separated video-and-action modeling, and edge-side compute constraints still limit the practicality of current world models. Kairos addresses these challenges by unifying cross-embodiment pretraining, persistent world-state modeling, future generation, and executable action prediction within an efficient deployment-aware framework.
 
