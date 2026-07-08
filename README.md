@@ -108,7 +108,7 @@ Real-time Edge Performance: Industry-leading inference speed with ultra-low reso
     <tr>
         <!-- 左边一列 -->
         <td align="center">
-        <img src="assets/evals/eval_worldmodel_bench.png" height="350px" alt="worldmodel_bench"><br>
+        <img src="assets/evals/eval_worldmodel_bench_robot_new.png" height="350px" alt="worldmodel_bench"><br>
         </td>
         <!-- 右边一列 -->
         <td align="center">
@@ -328,8 +328,8 @@ Kairos is open-sourced under the Apache License 2.0. Feel free to use, modify, a
 If you find our work helpful, please cite us.
 
 ```
-@misc{kairosteam2026kairosnativeworldmodel,
-      title={Kairos: A Native World Model Stack for Physical AI}, 
+@misc{kairosteam2026kairosregretawarenativeworldaction,
+      title={Kairos: A Regret-Aware Native World-Action Model Stack for Physical AI}, 
       author={Kairos Team and Fei Wang and Shan You and Qiming Zhang and Tao Huang and Zuoyi Fu and Zhisheng Zheng and Yunlong Xi and Feng Lv and Xiaoming Wu and Zeyu Liu and Cong Wan and Pu Li and Ruiqing Yang and Xiaoou Li and Wei Wang and Kangkang Zhu and Yuwei Zhang and Shi Fu and Zheng Zhang and Xiaoning Wu and Xuzeng Fan and Dacheng Tao and Xiaogang Wang},
       year={2026},
       eprint={2606.16533},
